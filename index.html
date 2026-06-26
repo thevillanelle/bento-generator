@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bento Box Generator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #0f0f0f;
+  color: #fff;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Top Bar ── */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: #1a1a1a;
+  border-bottom: 1px solid #2a2a2a;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+.topbar h1 { font-size: 15px; font-weight: 700; letter-spacing: -0.02em; margin-right: 4px; }
+.topbar-sep { width: 1px; height: 20px; background: #333; flex-shrink: 0; }
+.ctrl { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #888; }
+.ctrl label { white-space: nowrap; }
+.ctrl input[type=range] { width: 72px; accent-color: #6366f1; cursor: pointer; }
+.ctrl input[type=color] {
+  width: 28px; height: 24px;
+  border: 1px solid #444; border-radius: 4px;
+  cursor: pointer; background: none; padding: 1px;
+}
+.ctrl input[type=number] {
+  width: 46px; padding: 4px 6px;
+  background: #2a2a2a; border: 1px solid #3a3a3a;
+  border-radius: 5px; color: #fff; font-size: 12px;
+}
+select {
+  padding: 4px 7px;
+  border-radius: 5px;
+  border: 1px solid #3a3a3a;
+  background: #2a2a2a;
+  color: #fff;
+  font-size: 12px;
+  cursor: pointer;
+}
+.btn {
+  padding: 5px 11px;
+  border-radius: 6px;
+  border: 1px solid #3a3a3a;
+  background: #2a2a2a;
+  color: #ccc;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background 0.12s, color 0.12s;
+  white-space: nowrap;
+}
+.btn:hover { background: #333; color: #fff; }
+.btn.primary { background: #6366f1; border-color: #6366f1; color: #fff; }
+.btn.primary:hover { background: #5254cc; }
+
+/* ── Main ── */
+.main { display: flex; flex: 1; overflow: hidden; }
+
+/* ── Library ── */
+.library {
+  width: 186px;
+  flex-shrink: 0;
+  background: #161616;
+  border-right: 1px solid #2a2a2a;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.panel-header {
+  padding: 10px 12px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #555;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  border-bottom: 1px solid #222;
+  flex-shrink: 0;
+}
+.upload-zone {
+  margin: 10px;
+  border: 1.5px dashed #333;
+  border-radius: 8px;
+  padding: 14px 8px;
+  text-align: center;
+  cursor: pointer;
+  font-size: 11px;
+  color: #555;
+  transition: border-color 0.15s, background 0.15s;
+  flex-shrink: 0;
+  user-select: none;
+}
+.upload-zone:hover, .upload-zone.drag-over {
+  border-color: #6366f1;
+  background: rgba(99,102,241,0.07);
+  color: #999;
+}
+.upload-zone input { display: none; }
+.upload-icon { opacity: 0.4; margin-bottom: 6px; }
+.photo-grid {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 8px 8px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+  align-content: start;
+}
+.photo-thumb {
+  aspect-ratio: 1;
+  border-radius: 6px;
+  overflow: hidden;
+  cursor: grab;
+  border: 2px solid transparent;
+  transition: border-color 0.12s;
+  position: relative;
+  background: #222;
+}
+.photo-thumb:hover { border-color: #6366f1; }
+.photo-thumb.dragging { opacity: 0.35; cursor: grabbing; }
+.photo-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.thumb-remove {
+  position: absolute; top: 2px; right: 2px;
+  width: 16px; height: 16px;
+  background: rgba(0,0,0,0.75);
+  border-radius: 50%;
+  display: none;
+  align-items: center; justify-content: center;
+  font-size: 9px; cursor: pointer; color: #fff;
+  line-height: 1;
+}
+.photo-thumb:hover .thumb-remove { display: flex; }
+
+/* ── Editor ── */
+.editor {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+  padding: 28px;
+  background: #0f0f0f;
+}
+.bento-grid {
+  display: grid;
+  background: #1a1a1a;
+  border-radius: 14px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.bento-cell {
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  background: #2a2a2a;
+  min-width: 0; min-height: 0;
+  transition: outline 0.08s;
+  user-select: none;
+}
+.bento-cell::after {
+  content: '';
+  position: absolute; inset: 0;
+  outline: 2px solid transparent;
+  outline-offset: -2px;
+  border-radius: inherit;
+  transition: outline-color 0.08s;
+  pointer-events: none;
+  z-index: 10;
+}
+.bento-cell:hover::after { outline-color: rgba(99,102,241,0.45); }
+.bento-cell.selected::after { outline-color: #6366f1; }
+.bento-cell.drop-target::after { outline-color: #10b981; }
+.bento-cell.drop-target { background: rgba(16,185,129,0.08) !important; }
+.cell-img {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+  transform-origin: center;
+}
+.cell-placeholder {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  color: #444; font-size: 11px; gap: 5px;
+  pointer-events: none;
+}
+.bento-cell.has-photo .cell-placeholder { display: none; }
+.resize-handle {
+  position: absolute; bottom: 0; right: 0;
+  width: 18px; height: 18px;
+  cursor: se-resize;
+  display: none;
+  z-index: 20;
+}
+.bento-cell.selected .resize-handle { display: block; }
+.resize-handle::before {
+  content: '';
+  position: absolute; bottom: 4px; right: 4px;
+  width: 7px; height: 7px;
+  border-right: 2px solid #6366f1;
+  border-bottom: 2px solid #6366f1;
+  border-radius: 1px;
+}
+
+/* ── Properties ── */
+.properties {
+  width: 210px;
+  flex-shrink: 0;
+  background: #161616;
+  border-left: 1px solid #2a2a2a;
+  overflow-y: auto;
+  padding: 14px;
+}
+.props-empty { color: #444; font-size: 12px; text-align: center; padding: 24px 0; }
+.prop-section { margin-bottom: 18px; }
+.prop-section-title {
+  font-size: 10px; font-weight: 700; color: #555;
+  text-transform: uppercase; letter-spacing: 0.07em;
+  margin-bottom: 10px;
+}
+.prop-row {
+  display: flex; align-items: center;
+  justify-content: space-between;
+  margin-bottom: 9px;
+  font-size: 12px;
+}
+.prop-row label { color: #777; font-size: 11px; }
+.prop-row input[type=range] { width: 90px; accent-color: #6366f1; cursor: pointer; }
+.prop-row input[type=color] {
+  width: 30px; height: 22px;
+  border: 1px solid #3a3a3a; border-radius: 4px;
+  cursor: pointer; background: none; padding: 1px;
+}
+.span-control { display: flex; align-items: center; gap: 5px; }
+.span-btn {
+  width: 22px; height: 22px;
+  border-radius: 4px;
+  border: 1px solid #3a3a3a;
+  background: #252525;
+  color: #ccc;
+  cursor: pointer; font-size: 13px;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.1s;
+  line-height: 1;
+}
+.span-btn:hover { background: #333; color: #fff; }
+.span-val { min-width: 18px; text-align: center; font-size: 12px; color: #ccc; }
+.remove-cell-photo {
+  width: 100%; padding: 5px;
+  border-radius: 5px; border: 1px solid #3a3a3a;
+  background: #252525; color: #cc5555;
+  cursor: pointer; font-size: 11px;
+  transition: background 0.1s;
+}
+.remove-cell-photo:hover { background: #2e1a1a; }
+
+/* ── Modal ── */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.72);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 200;
+  backdrop-filter: blur(4px);
+}
+.modal {
+  background: #1c1c1c;
+  border: 1px solid #2e2e2e;
+  border-radius: 14px;
+  padding: 24px;
+  width: 300px;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+}
+.modal h2 { font-size: 15px; margin-bottom: 16px; }
+.modal-row { margin-bottom: 12px; }
+.modal-row label { display: block; font-size: 11px; color: #777; margin-bottom: 4px; }
+.modal-row select, .modal-row input[type=range] { width: 100%; }
+.modal-row input[type=range] { accent-color: #6366f1; }
+.modal-actions { display: flex; gap: 8px; margin-top: 18px; justify-content: flex-end; }
+</style>
+</head>
+<body>
+
+<!-- Top Bar -->
+<div class="topbar">
+  <h1>Bento Generator</h1>
+  <div class="topbar-sep"></div>
+
+  <div class="ctrl">
+    <label>Layout</label>
+    <select id="layoutPicker" onchange="applyLayout(this.value)">
+      <option value="classic">Classic</option>
+      <option value="feature">Feature</option>
+      <option value="mosaic">Mosaic</option>
+      <option value="minimal">Minimal</option>
+      <option value="wide">Wide</option>
+      <option value="custom">Custom</option>
+    </select>
+  </div>
+
+  <div class="ctrl" id="customCtrls" style="display:none">
+    <label>Cols</label>
+    <input type="number" id="colsInput" min="2" max="8" value="4" onchange="rebuildCustomGrid()">
+    <label>Rows</label>
+    <input type="number" id="rowsInput" min="2" max="8" value="3" onchange="rebuildCustomGrid()">
+  </div>
+
+  <div class="topbar-sep"></div>
+
+  <div class="ctrl">
+    <label>Cell size</label>
+    <input type="range" id="cellSizeSlider" min="80" max="220" value="140" oninput="updateCellSize(this.value)">
+    <span id="cellSizeVal">140px</span>
+  </div>
+
+  <div class="ctrl">
+    <label>Gap</label>
+    <input type="range" id="gapSlider" min="0" max="24" value="8" oninput="updateGap(this.value)">
+    <span id="gapVal">8px</span>
+  </div>
+
+  <div class="ctrl">
+    <label>Grid BG</label>
+    <input type="color" id="gridBgColor" value="#1a1a1a" oninput="updateGridBg(this.value)">
+  </div>
+
+  <div class="ctrl">
+    <label>Corner</label>
+    <input type="range" id="gridRadiusSlider" min="0" max="32" value="14" oninput="updateGridRadius(this.value)">
+    <span id="gridRadiusVal">14px</span>
+  </div>
+
+  <div style="flex:1"></div>
+  <button class="btn primary" onclick="showExportModal()">Export Image ↓</button>
+</div>
+
+<!-- Main -->
+<div class="main">
+
+  <!-- Library -->
+  <div class="library">
+    <div class="panel-header">Photos</div>
+    <div class="upload-zone" id="uploadZone"
+         onclick="document.getElementById('fileInput').click()"
+         ondragover="libDragOver(event)"
+         ondrop="libDrop(event)"
+         ondragleave="this.classList.remove('drag-over')">
+      <input type="file" id="fileInput" multiple accept="image/*" onchange="handleFiles(event)">
+      <div class="upload-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="3" y="3" width="18" height="18" rx="2"/>
+          <circle cx="8.5" cy="8.5" r="1.5"/>
+          <path d="m21 15-5-5L5 21"/>
+        </svg>
+      </div>
+      <div>Drop or click<br>to add photos</div>
+    </div>
+    <div class="photo-grid" id="photoGrid"></div>
+  </div>
+
+  <!-- Editor -->
+  <div class="editor" id="editorArea" ondragover="e=>e.preventDefault()" ondrop="e=>e.preventDefault()">
+    <div class="bento-grid" id="bentoGrid"></div>
+  </div>
+
+  <!-- Properties -->
+  <div class="properties">
+    <div class="props-empty" id="propsEmpty">Click a cell to edit it</div>
+    <div id="propsContent" style="display:none">
+
+      <div class="prop-section">
+        <div class="prop-section-title">Cell Size</div>
+        <div class="prop-row">
+          <label>Width (cols)</label>
+          <div class="span-control">
+            <button class="span-btn" onclick="adjustSpan('col',-1)">−</button>
+            <span class="span-val" id="colSpanVal">1</span>
+            <button class="span-btn" onclick="adjustSpan('col',1)">+</button>
+          </div>
+        </div>
+        <div class="prop-row">
+          <label>Height (rows)</label>
+          <div class="span-control">
+            <button class="span-btn" onclick="adjustSpan('row',-1)">−</button>
+            <span class="span-val" id="rowSpanVal">1</span>
+            <button class="span-btn" onclick="adjustSpan('row',1)">+</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="prop-section">
+        <div class="prop-section-title">Cell Style</div>
+        <div class="prop-row">
+          <label>Background</label>
+          <input type="color" id="cellBg" value="#2a2a2a" oninput="applyCellBg(this.value)">
+        </div>
+        <div class="prop-row">
+          <label>Corner</label>
+          <input type="range" id="cellRadius" min="0" max="40" value="0" oninput="applyCellRadius(this.value)">
+          <span id="cellRadiusVal">0px</span>
+        </div>
+      </div>
+
+      <div class="prop-section" id="photoSection" style="display:none">
+        <div class="prop-section-title">Photo</div>
+        <div class="prop-row">
+          <label>Zoom</label>
+          <input type="range" id="photoZoom" min="100" max="300" value="100" oninput="applyPhotoZoom(this.value)">
+          <span id="photoZoomVal">100%</span>
+        </div>
+        <div class="prop-row">
+          <label>Pan X</label>
+          <input type="range" id="panX" min="-100" max="100" value="0" oninput="applyPan()">
+        </div>
+        <div class="prop-row">
+          <label>Pan Y</label>
+          <input type="range" id="panY" min="-100" max="100" value="0" oninput="applyPan()">
+        </div>
+        <button class="remove-cell-photo" onclick="clearCellPhoto()">Remove Photo</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Export Modal -->
+<div class="modal-overlay" id="exportModal" style="display:none" onclick="if(event.target===this)hideExportModal()">
+  <div class="modal">
+    <h2>Export Image</h2>
+    <div class="modal-row">
+      <label>Format</label>
+      <select id="exportFmt" onchange="toggleQuality()">
+        <option value="png">PNG (lossless)</option>
+        <option value="jpeg">JPEG</option>
+        <option value="webp">WebP</option>
+      </select>
+    </div>
+    <div class="modal-row" id="qualityRow" style="display:none">
+      <label>Quality — <span id="qualityLabel">90%</span></label>
+      <input type="range" id="exportQuality" min="10" max="100" value="90"
+             oninput="document.getElementById('qualityLabel').textContent=this.value+'%'">
+    </div>
+    <div class="modal-row">
+      <label>Resolution</label>
+      <select id="exportScale">
+        <option value="1">1× — screen</option>
+        <option value="2" selected>2× — retina</option>
+        <option value="3">3× — high-res</option>
+        <option value="4">4× — print</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="hideExportModal()">Cancel</button>
+      <button class="btn primary" onclick="exportImage()">Download</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ──────────────────────────────────────────────
+// State
+// ──────────────────────────────────────────────
+let photos = [];
+let cells = [];
+let gridCols = 4, gridRows = 3;
+let cellSize = 140, gap = 8, gridRadius = 14;
+let selectedId = null;
+let dragPhotoId = null;
+let photoCounter = 0, cellCounter = 0;
+
+// ──────────────────────────────────────────────
+// Layout definitions
+// ──────────────────────────────────────────────
+const LAYOUTS = {
+  classic: {
+    cols: 4, rows: 3,
+    cells: [
+      {c:1,r:1,cs:2,rs:2},{c:3,r:1,cs:1,rs:1},{c:4,r:1,cs:1,rs:1},
+      {c:3,r:2,cs:2,rs:1},
+      {c:1,r:3,cs:1,rs:1},{c:2,r:3,cs:1,rs:1},{c:3,r:3,cs:1,rs:1},{c:4,r:3,cs:1,rs:1}
+    ]
+  },
+  feature: {
+    cols: 3, rows: 3,
+    cells: [
+      {c:1,r:1,cs:2,rs:2},{c:3,r:1,cs:1,rs:1},{c:3,r:2,cs:1,rs:1},
+      {c:1,r:3,cs:1,rs:1},{c:2,r:3,cs:1,rs:1},{c:3,r:3,cs:1,rs:1}
+    ]
+  },
+  mosaic: {
+    cols: 4, rows: 4,
+    cells: [
+      {c:1,r:1,cs:1,rs:2},{c:2,r:1,cs:2,rs:1},{c:4,r:1,cs:1,rs:1},
+      {c:2,r:2,cs:1,rs:1},{c:3,r:2,cs:2,rs:2},
+      {c:1,r:3,cs:2,rs:1},
+      {c:1,r:4,cs:1,rs:1},{c:2,r:4,cs:1,rs:1},{c:3,r:4,cs:2,rs:1}
+    ]
+  },
+  minimal: {
+    cols: 2, rows: 2,
+    cells: [
+      {c:1,r:1,cs:1,rs:1},{c:2,r:1,cs:1,rs:1},
+      {c:1,r:2,cs:2,rs:1}
+    ]
+  },
+  wide: {
+    cols: 5, rows: 2,
+    cells: [
+      {c:1,r:1,cs:1,rs:2},{c:2,r:1,cs:2,rs:1},{c:4,r:1,cs:1,rs:1},{c:5,r:1,cs:1,rs:1},
+      {c:2,r:2,cs:1,rs:1},{c:3,r:2,cs:1,rs:1},{c:4,r:2,cs:2,rs:1}
+    ]
+  }
+};
+
+// ──────────────────────────────────────────────
+// Init
+// ──────────────────────────────────────────────
+function init() { applyLayout('classic'); }
+
+function applyLayout(name) {
+  document.getElementById('customCtrls').style.display = name === 'custom' ? 'flex' : 'none';
+  if (name === 'custom') { rebuildCustomGrid(); return; }
+
+  const L = LAYOUTS[name];
+  if (!L) return;
+  gridCols = L.cols; gridRows = L.rows;
+  document.getElementById('colsInput').value = gridCols;
+  document.getElementById('rowsInput').value = gridRows;
+
+  const old = [...cells];
+  cells = L.cells.map((c, i) => {
+    const o = old[i] || {};
+    return {
+      id: ++cellCounter,
+      col: c.c, row: c.r, colSpan: c.cs, rowSpan: c.rs,
+      photoId: o.photoId ?? null,
+      zoom: o.zoom ?? 100,
+      panX: o.panX ?? 0, panY: o.panY ?? 0,
+      bg: o.bg ?? '#2a2a2a',
+      radius: o.radius ?? 0
+    };
+  });
+  selectedId = null;
+  render(); syncProps();
+}
+
+function rebuildCustomGrid() {
+  gridCols = parseInt(document.getElementById('colsInput').value) || 4;
+  gridRows = parseInt(document.getElementById('rowsInput').value) || 3;
+  cells = [];
+  for (let r = 1; r <= gridRows; r++)
+    for (let c = 1; c <= gridCols; c++)
+      cells.push({ id: ++cellCounter, col: c, row: r, colSpan: 1, rowSpan: 1,
+                   photoId: null, zoom: 100, panX: 0, panY: 0, bg: '#2a2a2a', radius: 0 });
+  selectedId = null;
+  render(); syncProps();
+}
+
+// ──────────────────────────────────────────────
+// Render
+// ──────────────────────────────────────────────
+function render() {
+  const grid = document.getElementById('bentoGrid');
+  grid.style.gridTemplateColumns = `repeat(${gridCols}, ${cellSize}px)`;
+  grid.style.gridTemplateRows    = `repeat(${gridRows}, ${cellSize}px)`;
+  grid.style.gap = gap + 'px';
+  grid.style.borderRadius = gridRadius + 'px';
+
+  grid.innerHTML = '';
+
+  cells.forEach(cell => {
+    const el = document.createElement('div');
+    el.className = 'bento-cell' + (cell.photoId ? ' has-photo' : '') + (cell.id === selectedId ? ' selected' : '');
+    el.dataset.id = cell.id;
+    el.style.gridColumn  = `${cell.col} / span ${cell.colSpan}`;
+    el.style.gridRow     = `${cell.row} / span ${cell.rowSpan}`;
+    el.style.background  = cell.bg;
+    el.style.borderRadius = cell.radius + 'px';
+
+    // Photo
+    if (cell.photoId) {
+      const p = photos.find(p => p.id === cell.photoId);
+      if (p) {
+        const img = document.createElement('img');
+        img.className = 'cell-img';
+        img.src = p.src;
+        img.style.transform = imgTransform(cell);
+        el.appendChild(img);
+      }
+    }
+
+    // Placeholder
+    const ph = document.createElement('div');
+    ph.className = 'cell-placeholder';
+    ph.innerHTML = `
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <rect x="3" y="3" width="18" height="18" rx="2"/>
+        <circle cx="8.5" cy="8.5" r="1.5"/>
+        <path d="m21 15-5-5L5 21"/>
+      </svg>
+      <span>Drop photo</span>`;
+    el.appendChild(ph);
+
+    // Resize handle
+    const rh = document.createElement('div');
+    rh.className = 'resize-handle';
+    rh.addEventListener('mousedown', startResize(cell, el));
+    el.appendChild(rh);
+
+    // Click → select
+    el.addEventListener('click', e => { e.stopPropagation(); selectCell(cell.id); });
+
+    // Drop photo
+    el.addEventListener('dragover', e => { e.preventDefault(); el.classList.add('drop-target'); });
+    el.addEventListener('dragleave', () => el.classList.remove('drop-target'));
+    el.addEventListener('drop', e => {
+      e.preventDefault();
+      el.classList.remove('drop-target');
+      if (dragPhotoId !== null) assignPhoto(cell.id, dragPhotoId);
+    });
+
+    // Drag to pan
+    if (cell.photoId) {
+      let panning = false, sx, sy, spx, spy;
+      el.addEventListener('mousedown', e => {
+        if (e.target.closest('.resize-handle')) return;
+        panning = true; sx = e.clientX; sy = e.clientY;
+        spx = cell.panX; spy = cell.panY;
+        e.preventDefault();
+      });
+      window.addEventListener('mousemove', e => {
+        if (!panning) return;
+        const scale = cellSize / 100;
+        cell.panX = spx + (e.clientX - sx) / scale;
+        cell.panY = spy + (e.clientY - sy) / scale;
+        const img = el.querySelector('.cell-img');
+        if (img) img.style.transform = imgTransform(cell);
+        if (cell.id === selectedId) {
+          document.getElementById('panX').value = clamp(cell.panX, -100, 100);
+          document.getElementById('panY').value = clamp(cell.panY, -100, 100);
+        }
+      });
+      window.addEventListener('mouseup', () => { panning = false; });
+
+      // Scroll zoom
+      el.addEventListener('wheel', e => {
+        e.preventDefault();
+        cell.zoom = clamp(cell.zoom - e.deltaY * 0.25, 100, 300);
+        const img = el.querySelector('.cell-img');
+        if (img) img.style.transform = imgTransform(cell);
+        if (cell.id === selectedId) {
+          document.getElementById('photoZoom').value = cell.zoom;
+          document.getElementById('photoZoomVal').textContent = Math.round(cell.zoom) + '%';
+        }
+      }, { passive: false });
+    }
+
+    grid.appendChild(el);
+  });
+}
+
+function imgTransform(cell) {
+  return `scale(${cell.zoom / 100}) translate(${cell.panX}%, ${cell.panY}%)`;
+}
+
+// ──────────────────────────────────────────────
+// Resize handle drag
+// ──────────────────────────────────────────────
+function startResize(cell, el) {
+  return function(e) {
+    e.preventDefault(); e.stopPropagation();
+    const grid = document.getElementById('bentoGrid');
+    const gridRect = grid.getBoundingClientRect();
+    const colW = (gridRect.width  - gap * (gridCols - 1)) / gridCols;
+    const rowH = (gridRect.height - gap * (gridRows - 1)) / gridRows;
+
+    const onMove = ev => {
+      const relX = ev.clientX - gridRect.left;
+      const relY = ev.clientY - gridRect.top;
+      const newCS = Math.max(1, Math.min(gridCols - cell.col + 1,
+        Math.round((relX - (cell.col - 1) * (colW + gap)) / (colW + gap))));
+      const newRS = Math.max(1, Math.min(gridRows - cell.row + 1,
+        Math.round((relY - (cell.row - 1) * (rowH + gap)) / (rowH + gap))));
+      if (newCS !== cell.colSpan || newRS !== cell.rowSpan) {
+        cell.colSpan = newCS; cell.rowSpan = newRS;
+        render(); syncProps();
+      }
+    };
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
+}
+
+// Click outside deselects
+document.getElementById('editorArea').addEventListener('click', e => {
+  if (e.target === e.currentTarget || e.target === document.getElementById('bentoGrid')) {
+    selectedId = null; render(); syncProps();
+  }
+});
+
+// ──────────────────────────────────────────────
+// Selection & Properties
+// ──────────────────────────────────────────────
+function selectCell(id) { selectedId = id; render(); syncProps(); }
+
+function syncProps() {
+  const empty   = document.getElementById('propsEmpty');
+  const content = document.getElementById('propsContent');
+  if (!selectedId) { empty.style.display='block'; content.style.display='none'; return; }
+  const cell = cells.find(c => c.id === selectedId);
+  if (!cell) return;
+  empty.style.display='none'; content.style.display='block';
+  document.getElementById('colSpanVal').textContent = cell.colSpan;
+  document.getElementById('rowSpanVal').textContent = cell.rowSpan;
+  document.getElementById('cellBg').value    = cell.bg;
+  document.getElementById('cellRadius').value = cell.radius;
+  document.getElementById('cellRadiusVal').textContent = cell.radius + 'px';
+  const ps = document.getElementById('photoSection');
+  if (cell.photoId) {
+    ps.style.display = 'block';
+    document.getElementById('photoZoom').value = cell.zoom;
+    document.getElementById('photoZoomVal').textContent = Math.round(cell.zoom) + '%';
+    document.getElementById('panX').value = clamp(cell.panX, -100, 100);
+    document.getElementById('panY').value = clamp(cell.panY, -100, 100);
+  } else {
+    ps.style.display = 'none';
+  }
+}
+
+function adjustSpan(axis, delta) {
+  const cell = cells.find(c => c.id === selectedId);
+  if (!cell) return;
+  if (axis === 'col')
+    cell.colSpan = clamp(cell.colSpan + delta, 1, gridCols - cell.col + 1);
+  else
+    cell.rowSpan = clamp(cell.rowSpan + delta, 1, gridRows - cell.row + 1);
+  render(); syncProps();
+}
+
+function applyCellBg(val) {
+  const cell = cells.find(c => c.id === selectedId);
+  if (!cell) return;
+  cell.bg = val;
+  const el = document.querySelector(`[data-id="${selectedId}"]`);
+  if (el) el.style.background = val;
+}
+
+function applyCellRadius(val) {
+  const cell = cells.find(c => c.id === selectedId);
+  if (!cell) return;
+  cell.radius = parseInt(val);
+  document.getElementById('cellRadiusVal').textContent = val + 'px';
+  const el = document.querySelector(`[data-id="${selectedId}"]`);
+  if (el) el.style.borderRadius = val + 'px';
+}
+
+function applyPhotoZoom(val) {
+  const cell = cells.find(c => c.id === selectedId);
+  if (!cell) return;
+  cell.zoom = parseFloat(val);
+  document.getElementById('photoZoomVal').textContent = Math.round(val) + '%';
+  const img = document.querySelector(`[data-id="${selectedId}"] .cell-img`);
+  if (img) img.style.transform = imgTransform(cell);
+}
+
+function applyPan() {
+  const cell = cells.find(c => c.id === selectedId);
+  if (!cell) return;
+  cell.panX = parseFloat(document.getElementById('panX').value);
+  cell.panY = parseFloat(document.getElementById('panY').value);
+  const img = document.querySelector(`[data-id="${selectedId}"] .cell-img`);
+  if (img) img.style.transform = imgTransform(cell);
+}
+
+function clearCellPhoto() {
+  const cell = cells.find(c => c.id === selectedId);
+  if (!cell) return;
+  cell.photoId = null;
+  render(); syncProps();
+}
+
+// ──────────────────────────────────────────────
+// Grid Controls
+// ──────────────────────────────────────────────
+function updateCellSize(val) {
+  cellSize = parseInt(val);
+  document.getElementById('cellSizeVal').textContent = val + 'px';
+  const g = document.getElementById('bentoGrid');
+  g.style.gridTemplateColumns = `repeat(${gridCols}, ${val}px)`;
+  g.style.gridTemplateRows    = `repeat(${gridRows}, ${val}px)`;
+}
+
+function updateGap(val) {
+  gap = parseInt(val);
+  document.getElementById('gapVal').textContent = val + 'px';
+  document.getElementById('bentoGrid').style.gap = val + 'px';
+}
+
+function updateGridBg(val) {
+  document.getElementById('bentoGrid').style.background = val;
+}
+
+function updateGridRadius(val) {
+  gridRadius = parseInt(val);
+  document.getElementById('gridRadiusVal').textContent = val + 'px';
+  document.getElementById('bentoGrid').style.borderRadius = val + 'px';
+}
+
+// ──────────────────────────────────────────────
+// Photo Library
+// ──────────────────────────────────────────────
+function handleFiles(e) {
+  Array.from(e.target.files).forEach(loadPhoto);
+  e.target.value = '';
+}
+
+function libDragOver(e) {
+  e.preventDefault();
+  document.getElementById('uploadZone').classList.add('drag-over');
+}
+
+function libDrop(e) {
+  e.preventDefault();
+  document.getElementById('uploadZone').classList.remove('drag-over');
+  Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/')).forEach(loadPhoto);
+}
+
+function loadPhoto(file) {
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const photo = { id: ++photoCounter, src: ev.target.result, name: file.name };
+    photos.push(photo);
+    addThumb(photo);
+  };
+  reader.readAsDataURL(file);
+}
+
+function addThumb(photo) {
+  const grid = document.getElementById('photoGrid');
+  const t = document.createElement('div');
+  t.className = 'photo-thumb';
+  t.draggable = true;
+  t.dataset.pid = photo.id;
+  t.innerHTML = `<img src="${photo.src}" alt=""><div class="thumb-remove" onclick="deletePhoto(${photo.id},event)">×</div>`;
+  t.addEventListener('dragstart', e => {
+    dragPhotoId = photo.id;
+    t.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'copy';
+  });
+  t.addEventListener('dragend', () => {
+    dragPhotoId = null;
+    t.classList.remove('dragging');
+    document.querySelectorAll('.drop-target').forEach(el => el.classList.remove('drop-target'));
+  });
+  grid.appendChild(t);
+}
+
+function deletePhoto(id, e) {
+  e.stopPropagation();
+  photos = photos.filter(p => p.id !== id);
+  cells.forEach(c => { if (c.photoId === id) c.photoId = null; });
+  document.querySelector(`[data-pid="${id}"]`)?.remove();
+  render(); syncProps();
+}
+
+function assignPhoto(cellId, photoId) {
+  const cell = cells.find(c => c.id === cellId);
+  if (!cell) return;
+  cell.photoId = photoId; cell.zoom = 100; cell.panX = 0; cell.panY = 0;
+  render(); syncProps();
+}
+
+// ──────────────────────────────────────────────
+// Export
+// ──────────────────────────────────────────────
+function showExportModal() { document.getElementById('exportModal').style.display = 'flex'; }
+function hideExportModal() { document.getElementById('exportModal').style.display = 'none'; }
+
+function toggleQuality() {
+  const fmt = document.getElementById('exportFmt').value;
+  document.getElementById('qualityRow').style.display = fmt === 'png' ? 'none' : 'block';
+}
+
+async function exportImage() {
+  const fmt     = document.getElementById('exportFmt').value;
+  const quality = parseInt(document.getElementById('exportQuality').value) / 100;
+  const scale   = parseInt(document.getElementById('exportScale').value);
+  const grid    = document.getElementById('bentoGrid');
+
+  // Temporarily hide selection outline
+  const prev = selectedId; selectedId = null; render();
+  await new Promise(r => setTimeout(r, 60));
+
+  try {
+    const canvas = await html2canvas(grid, {
+      scale, useCORS: true, allowTaint: true,
+      backgroundColor: null, logging: false
+    });
+
+    const mime = { png: 'image/png', jpeg: 'image/jpeg', webp: 'image/webp' }[fmt];
+    const url  = canvas.toDataURL(mime, quality);
+    const a    = document.createElement('a');
+    a.href = url;
+    a.download = `bento.${fmt}`;
+    a.click();
+  } finally {
+    selectedId = prev; render(); hideExportModal();
+  }
+}
+
+// ──────────────────────────────────────────────
+// Utils
+// ──────────────────────────────────────────────
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+init();
+</script>
+</body>
+</html>
