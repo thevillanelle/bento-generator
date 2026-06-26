@@ -332,7 +332,30 @@ select {
   color: var(--text-4); font-size: 11px; gap: 5px;
   pointer-events: none;
 }
-.bento-cell.has-photo .cell-placeholder { display: none; }
+.bento-cell.add-tile {
+  background: transparent !important;
+  border: 2.5px dashed var(--border-mid);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.bento-cell.add-tile:hover {
+  border-color: var(--accent);
+  background: var(--accent-bg) !important;
+}
+.add-tile-inner {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: none;
+}
+.add-tile-plus {
+  font-size: 36px;
+  font-weight: 300;
+  line-height: 1;
+  color: var(--border-mid);
+  transition: color 0.15s;
+}
+.bento-cell.add-tile:hover .add-tile-plus { color: var(--accent); }
+.bento-grid.exporting .bento-cell.add-tile { display: none; }
 .resize-handle {
   position: absolute; bottom: 0; right: 0;
   width: 18px; height: 18px;
@@ -936,6 +959,32 @@ function render() {
 
     grid.appendChild(el);
   });
+
+  // Fill empty grid positions with "add tile" placeholders
+  const occupied = new Set();
+  cells.forEach(cell => {
+    for (let r = cell.row; r < cell.row + cell.rowSpan; r++)
+      for (let c = cell.col; c < cell.col + cell.colSpan; c++)
+        occupied.add(`${c},${r}`);
+  });
+  for (let r = 1; r <= gridRows; r++) {
+    for (let c = 1; c <= gridCols; c++) {
+      if (occupied.has(`${c},${r}`)) continue;
+      const col = c, row = r;
+      const add = document.createElement('div');
+      add.className = 'bento-cell add-tile';
+      add.style.gridColumn = col;
+      add.style.gridRow    = row;
+      add.innerHTML = '<div class="add-tile-inner"><span class="add-tile-plus">+</span></div>';
+      add.addEventListener('click', e => {
+        e.stopPropagation();
+        cells.push({ id: ++cellCounter, col, row, colSpan: 1, rowSpan: 1,
+                     photoId: null, zoom: 100, panX: 0, panY: 0, bg: '', radius: 0 });
+        render(); syncProps();
+      });
+      grid.appendChild(add);
+    }
+  }
 }
 
 function imgTransform(cell) {
@@ -1213,8 +1262,9 @@ async function exportImage() {
   const scale   = parseInt(document.getElementById('exportScale').value);
   const grid    = document.getElementById('bentoGrid');
 
-  // Temporarily hide selection outline
+  // Temporarily hide selection outline and add-tile cells
   const prev = selectedId; selectedId = null; render();
+  grid.classList.add('exporting');
   await new Promise(r => setTimeout(r, 60));
 
   try {
@@ -1230,6 +1280,7 @@ async function exportImage() {
     a.download = `bento.${fmt}`;
     a.click();
   } finally {
+    grid.classList.remove('exporting');
     selectedId = prev; render(); hideExportModal();
   }
 }
