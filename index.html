@@ -518,6 +518,28 @@ select {
 .help-step p { font-size: 12px; color: var(--text-3); line-height: 1.5; margin: 0; }
 .help-step em { color: var(--text-2); font-style: normal; font-weight: 500; }
 
+/* ── Toast ── */
+#toastContainer {
+  position: fixed; bottom: 24px; right: 24px;
+  display: flex; flex-direction: column-reverse; gap: 8px;
+  z-index: 500; pointer-events: none;
+}
+.toast {
+  padding: 9px 16px;
+  background: var(--bg-bar);
+  border: 1px solid var(--border-mid);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 12px; font-weight: 500;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.18s, transform 0.18s;
+  max-width: 280px;
+}
+.toast.toast-show { opacity: 1; transform: translateY(0); }
+.toast.toast-error { border-color: #cc3333; color: #ff7070; }
+
 /* ── Modal ── */
 .modal-overlay {
   position: fixed; inset: 0;
@@ -607,6 +629,8 @@ select {
 
   <div style="flex:1"></div>
   <button class="help-btn" onclick="showHelpModal()" title="How to use">?</button>
+  <button class="btn" onclick="loadProject()" title="Load a saved .bb project file">Load ↑</button>
+  <button class="btn" onclick="saveProject()" title="Save project as .bb file">Save ↓</button>
   <button class="btn primary" onclick="showExportModal()">Export Image ↓</button>
 </div>
 
@@ -788,6 +812,12 @@ select {
     </div>
   </div>
 </div>
+
+<!-- Toast container -->
+<div id="toastContainer"></div>
+
+<!-- Hidden file inputs -->
+<input type="file" id="loadInput" accept=".bb,.json" style="display:none" onchange="handleLoadFile(event)">
 
 <!-- Export Modal -->
 <div class="modal-overlay" id="exportModal" style="display:none" onclick="if(event.target===this)hideExportModal()">
@@ -1002,6 +1032,7 @@ function render() {
     del.textContent = '×';
     del.addEventListener('click', e => {
       e.stopPropagation();
+      pushHistory();
       cells = cells.filter(c => c.id !== cell.id);
       if (selectedId === cell.id) selectedId = null;
       render(); syncProps();
@@ -1082,6 +1113,7 @@ function render() {
       add.innerHTML = '<div class="add-tile-inner"><span class="add-tile-plus">+</span></div>';
       add.addEventListener('click', e => {
         e.stopPropagation();
+        pushHistory();
         cells.push({ id: ++cellCounter, col, row, colSpan: 1, rowSpan: 1,
                      photoId: null, zoom: 100, panX: 0, panY: 0, bg: '', radius: 12, shape: 'rounded' });
         render(); syncProps();
@@ -1138,6 +1170,7 @@ function startResize(cell, el) {
     const onUp = () => {
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
+      pushHistory();
       // Consume any cells overlapped by the resized cell
       cells = cells.filter(c => c.id === cell.id || !cellsOverlap(cell, c));
       render(); syncProps();
@@ -1192,6 +1225,7 @@ function syncProps() {
 function adjustSpan(axis, delta) {
   const cell = cells.find(c => c.id === selectedId);
   if (!cell) return;
+  pushHistory();
   if (axis === 'col')
     cell.colSpan = clamp(cell.colSpan + delta, 1, gridCols - cell.col + 1);
   else
@@ -1238,11 +1272,13 @@ function applyPan() {
 function clearCellPhoto() {
   const cell = cells.find(c => c.id === selectedId);
   if (!cell) return;
+  pushHistory();
   cell.photoId = null;
   render(); syncProps();
 }
 
 function removeCell() {
+  pushHistory();
   cells = cells.filter(c => c.id !== selectedId);
   selectedId = null;
   render(); syncProps();
@@ -1340,7 +1376,7 @@ function loadPhoto(file) {
   if (isHeic(file)) {
     heic2any({ blob: file, toType: 'image/jpeg', quality: 0.92 })
       .then(blob => loadPhoto(new File([blob], file.name.replace(/\.heic$/i, '.jpg'), { type: 'image/jpeg' })))
-      .catch(() => alert('Could not convert HEIC file: ' + file.name));
+      .catch(() => showToast('Could not convert HEIC: ' + file.name, true, 4000));
     return;
   }
   const reader = new FileReader();
@@ -1384,6 +1420,7 @@ function deletePhoto(id, e) {
 function assignPhoto(cellId, photoId) {
   const cell = cells.find(c => c.id === cellId);
   if (!cell) return;
+  pushHistory();
   cell.photoId = photoId; cell.zoom = 100; cell.panX = 0; cell.panY = 0;
   render(); syncProps();
 }
@@ -1456,6 +1493,102 @@ async function exportImage() {
 }
 
 // ──────────────────────────────────────────────
+// Undo history
+// ──────────────────────────────────────────────
+let history = [];
+
+function pushHistory() {
+  history.push(JSON.stringify({ cells, gridCols, gridRows }));
+  if (history.length > 40) history.shift();
+}
+
+function undo() {
+  if (!history.length) { showToast('Nothing to undo'); return; }
+  const snap = JSON.parse(history.pop());
+  cells = snap.cells;
+  gridCols = snap.gridCols;
+  gridRows = snap.gridRows;
+  render(); syncProps();
+  showToast('Undone');
+}
+
+// ──────────────────────────────────────────────
+// Toast notifications
+// ──────────────────────────────────────────────
+function showToast(msg, isError = false, duration = 2600) {
+  const t = document.createElement('div');
+  t.className = 'toast' + (isError ? ' toast-error' : '');
+  t.textContent = msg;
+  document.getElementById('toastContainer').appendChild(t);
+  requestAnimationFrame(() => requestAnimationFrame(() => t.classList.add('toast-show')));
+  setTimeout(() => {
+    t.classList.remove('toast-show');
+    setTimeout(() => t.remove(), 300);
+  }, duration);
+}
+
+// ──────────────────────────────────────────────
+// Save / Load project
+// ──────────────────────────────────────────────
+function saveProject() {
+  const data = {
+    version: 1,
+    gridCols, gridRows, gap, gridRadius, cellSize,
+    cells, photos
+  };
+  const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'bento-project.bb';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showToast('Project saved as .bb file');
+}
+
+function loadProject() {
+  document.getElementById('loadInput').click();
+}
+
+function handleLoadFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if (!data.version || !Array.isArray(data.cells)) throw new Error();
+      pushHistory();
+      cells     = data.cells;
+      photos    = data.photos || [];
+      gridCols  = data.gridCols  || 4;
+      gridRows  = data.gridRows  || 3;
+      gap       = data.gap       ?? 8;
+      gridRadius = data.gridRadius ?? 12;
+      cellSize  = data.cellSize  ?? 140;
+      cellCounter  = cells.length  ? Math.max(...cells.map(c => c.id))  : 0;
+      photoCounter = photos.length ? Math.max(...photos.map(p => p.id)) : 0;
+      // Rebuild photo thumbnails
+      document.getElementById('photoGrid').innerHTML = '';
+      photos.forEach(addThumb);
+      // Sync sliders
+      document.getElementById('cellSizeSlider').value = cellSize;
+      document.getElementById('cellSizeVal').textContent = cellSize + 'px';
+      document.getElementById('gapSlider').value = gap;
+      document.getElementById('gapVal').textContent = gap + 'px';
+      document.getElementById('gridRadiusSlider').value = gridRadius;
+      document.getElementById('gridRadiusVal').textContent = gridRadius + 'px';
+      selectedId = null;
+      render(); syncProps();
+      showToast('Project loaded');
+    } catch {
+      showToast('Could not read project file', true, 3500);
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
+
+// ──────────────────────────────────────────────
 // Utils
 // ──────────────────────────────────────────────
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
@@ -1465,6 +1598,10 @@ document.addEventListener('keydown', e => {
   if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) {
     if (['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) return;
     removeCell();
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+    e.preventDefault();
+    undo();
   }
 });
 
