@@ -268,6 +268,14 @@ select {
   transition: background 0.1s;
 }
 .remove-cell-photo:hover { background: #2e1a1a; }
+.remove-section-btn {
+  width: 100%; padding: 5px;
+  border-radius: 5px; border: 1px solid #4a2020;
+  background: #2e1010; color: #e05555;
+  cursor: pointer; font-size: 11px;
+  transition: background 0.1s;
+}
+.remove-section-btn:hover { background: #3e1515; }
 
 /* ── Modal ── */
 .modal-overlay {
@@ -431,6 +439,11 @@ select {
           <input type="range" id="panY" min="-100" max="100" value="0" oninput="applyPan()">
         </div>
         <button class="remove-cell-photo" onclick="clearCellPhoto()">Remove Photo</button>
+      </div>
+
+      <div class="prop-section">
+        <div class="prop-section-title">Section</div>
+        <button class="remove-section-btn" onclick="removeCell()">Delete Section</button>
       </div>
 
     </div>
@@ -625,12 +638,17 @@ function render() {
     el.addEventListener('click', e => { e.stopPropagation(); selectCell(cell.id); });
 
     // Drop photo
+    el.addEventListener('dragenter', e => { e.preventDefault(); el.classList.add('drop-target'); });
     el.addEventListener('dragover', e => { e.preventDefault(); el.classList.add('drop-target'); });
-    el.addEventListener('dragleave', () => el.classList.remove('drop-target'));
+    el.addEventListener('dragleave', e => {
+      // Only remove highlight when cursor leaves the cell entirely (not just moving to a child)
+      if (!el.contains(e.relatedTarget)) el.classList.remove('drop-target');
+    });
     el.addEventListener('drop', e => {
       e.preventDefault();
       el.classList.remove('drop-target');
-      if (dragPhotoId !== null) assignPhoto(cell.id, dragPhotoId);
+      const pid = parseInt(e.dataTransfer.getData('text/plain')) || dragPhotoId;
+      if (pid) assignPhoto(cell.id, pid);
     });
 
     // Drag to pan
@@ -797,6 +815,12 @@ function clearCellPhoto() {
   render(); syncProps();
 }
 
+function removeCell() {
+  cells = cells.filter(c => c.id !== selectedId);
+  selectedId = null;
+  render(); syncProps();
+}
+
 // ──────────────────────────────────────────────
 // Grid Controls
 // ──────────────────────────────────────────────
@@ -859,11 +883,12 @@ function addThumb(photo) {
   t.className = 'photo-thumb';
   t.draggable = true;
   t.dataset.pid = photo.id;
-  t.innerHTML = `<img src="${photo.src}" alt=""><div class="thumb-remove" onclick="deletePhoto(${photo.id},event)">×</div>`;
+  t.innerHTML = `<img src="${photo.src}" alt="" draggable="false"><div class="thumb-remove" onclick="deletePhoto(${photo.id},event)">×</div>`;
   t.addEventListener('dragstart', e => {
     dragPhotoId = photo.id;
-    t.classList.add('dragging');
+    e.dataTransfer.setData('text/plain', String(photo.id));
     e.dataTransfer.effectAllowed = 'copy';
+    t.classList.add('dragging');
   });
   t.addEventListener('dragend', () => {
     dragPhotoId = null;
