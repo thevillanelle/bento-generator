@@ -375,12 +375,12 @@ select {
 
 /* ── Properties ── */
 .properties {
-  width: 270px;
+  width: 360px;
   flex-shrink: 0;
   background: var(--bg-panel);
   border-left: 1px solid var(--border);
   overflow-y: auto;
-  padding: 14px;
+  padding: 16px;
   transition: background 0.2s, border-color 0.2s;
 }
 .props-empty { color: var(--text-5); font-size: 12px; text-align: center; padding: 24px 0; }
@@ -397,7 +397,7 @@ select {
   font-size: 12px;
 }
 .prop-row label { color: var(--text-3); font-size: 11px; }
-.prop-row input[type=range] { width: 120px; accent-color: var(--accent); cursor: pointer; }
+.prop-row input[type=range] { width: 172px; accent-color: var(--accent); cursor: pointer; }
 .prop-row input[type=color] {
   width: 30px; height: 22px;
   border: 1px solid var(--border-mid); border-radius: 4px;
@@ -452,6 +452,37 @@ select {
   transition: background 0.1s;
 }
 .remove-section-btn:hover { background: #3e1515; }
+
+/* Delete button on selected cell */
+.cell-delete-btn {
+  position: absolute; top: 7px; right: 7px;
+  width: 24px; height: 24px;
+  background: rgba(0,0,0,0.65);
+  border-radius: 50%;
+  display: none; align-items: center; justify-content: center;
+  font-size: 14px; cursor: pointer; color: #fff;
+  border: none; z-index: 15; line-height: 1;
+  transition: background 0.12s;
+}
+.bento-cell.selected .cell-delete-btn { display: flex; }
+.cell-delete-btn:hover { background: rgba(200,40,40,0.9); }
+
+/* Canvas size presets in export modal */
+.size-presets { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 8px; }
+.size-preset-btn {
+  padding: 5px 11px; border-radius: 5px; border: 1.5px solid var(--border-mid);
+  background: var(--bg-input); color: var(--text-3); cursor: pointer;
+  font-size: 11px; font-weight: 500; transition: all 0.12s; white-space: nowrap;
+}
+.size-preset-btn:hover { border-color: var(--accent); color: var(--text); }
+.size-preset-btn.active { border-color: var(--accent); background: var(--accent-bg); color: var(--accent); }
+.size-custom-inputs { display: flex; align-items: center; gap: 7px; margin-top: 6px; }
+.size-custom-inputs input[type=number] {
+  width: 72px; padding: 5px 7px;
+  background: var(--bg-input); border: 1px solid var(--border-mid);
+  border-radius: 5px; color: var(--text); font-size: 12px;
+}
+.size-custom-inputs span { color: var(--text-4); font-size: 12px; }
 
 /* ── Help button ── */
 .help-btn {
@@ -784,6 +815,23 @@ select {
         <option value="4">4× — print</option>
       </select>
     </div>
+    <div class="modal-row">
+      <label>Canvas Size</label>
+      <div class="size-presets" id="sizePresets">
+        <button class="size-preset-btn active" data-w="" data-h="" onclick="selectSizePreset(this)">Auto</button>
+        <button class="size-preset-btn" data-w="1080" data-h="1080" onclick="selectSizePreset(this)">1:1 — 1080</button>
+        <button class="size-preset-btn" data-w="1080" data-h="1350" onclick="selectSizePreset(this)">4:5 — Portrait</button>
+        <button class="size-preset-btn" data-w="1080" data-h="1920" onclick="selectSizePreset(this)">9:16 — Story</button>
+        <button class="size-preset-btn" data-w="1920" data-h="1080" onclick="selectSizePreset(this)">16:9 — Wide</button>
+        <button class="size-preset-btn" data-w="custom" data-h="custom" onclick="selectSizePreset(this)">Custom</button>
+      </div>
+      <div class="size-custom-inputs" id="sizeCustomInputs" style="display:none">
+        <input type="number" id="exportCanvasW" value="1080" min="100" max="8000" placeholder="Width">
+        <span>×</span>
+        <input type="number" id="exportCanvasH" value="1080" min="100" max="8000" placeholder="Height">
+        <span style="font-size:11px">px</span>
+      </div>
+    </div>
     <div class="modal-actions">
       <button class="btn" onclick="hideExportModal()">Cancel</button>
       <button class="btn primary" onclick="exportImage()">Download</button>
@@ -947,6 +995,18 @@ function render() {
     rh.className = 'resize-handle';
     rh.addEventListener('mousedown', startResize(cell, el));
     el.appendChild(rh);
+
+    // Delete button (visible when selected)
+    const del = document.createElement('button');
+    del.className = 'cell-delete-btn';
+    del.textContent = '×';
+    del.addEventListener('click', e => {
+      e.stopPropagation();
+      cells = cells.filter(c => c.id !== cell.id);
+      if (selectedId === cell.id) selectedId = null;
+      render(); syncProps();
+    });
+    el.appendChild(del);
 
     // Click → select
     el.addEventListener('click', e => { e.stopPropagation(); selectCell(cell.id); });
@@ -1341,13 +1401,32 @@ function toggleQuality() {
   document.getElementById('qualityRow').style.display = fmt === 'png' ? 'none' : 'block';
 }
 
+function selectSizePreset(btn) {
+  document.querySelectorAll('.size-preset-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const isCustom = btn.dataset.w === 'custom';
+  document.getElementById('sizeCustomInputs').style.display = isCustom ? 'flex' : 'none';
+}
+
 async function exportImage() {
   const fmt     = document.getElementById('exportFmt').value;
   const quality = parseInt(document.getElementById('exportQuality').value) / 100;
   const scale   = parseInt(document.getElementById('exportScale').value);
   const grid    = document.getElementById('bentoGrid');
 
-  // Temporarily hide selection outline and add-tile cells
+  // Resolve target canvas size
+  const activePreset = document.querySelector('.size-preset-btn.active');
+  let targetW = null, targetH = null;
+  if (activePreset) {
+    if (activePreset.dataset.w === 'custom') {
+      targetW = parseInt(document.getElementById('exportCanvasW').value) || null;
+      targetH = parseInt(document.getElementById('exportCanvasH').value) || null;
+    } else if (activePreset.dataset.w) {
+      targetW = parseInt(activePreset.dataset.w);
+      targetH = parseInt(activePreset.dataset.h);
+    }
+  }
+
   const prev = selectedId; selectedId = null; render();
   grid.classList.add('exporting');
   await new Promise(r => setTimeout(r, 60));
@@ -1358,12 +1437,18 @@ async function exportImage() {
       backgroundColor: null, logging: false
     });
 
+    let finalCanvas = canvas;
+    if (targetW && targetH) {
+      finalCanvas = document.createElement('canvas');
+      finalCanvas.width  = targetW;
+      finalCanvas.height = targetH;
+      finalCanvas.getContext('2d').drawImage(canvas, 0, 0, targetW, targetH);
+    }
+
     const mime = { png: 'image/png', jpeg: 'image/jpeg', webp: 'image/webp' }[fmt];
-    const url  = canvas.toDataURL(mime, quality);
+    const url  = finalCanvas.toDataURL(mime, quality);
     const a    = document.createElement('a');
-    a.href = url;
-    a.download = `bento.${fmt}`;
-    a.click();
+    a.href = url; a.download = `bento.${fmt}`; a.click();
   } finally {
     grid.classList.remove('exporting');
     selectedId = prev; render(); hideExportModal();
@@ -1374,6 +1459,14 @@ async function exportImage() {
 // Utils
 // ──────────────────────────────────────────────
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+// Delete selected cell with keyboard
+document.addEventListener('keydown', e => {
+  if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) {
+    if (['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) return;
+    removeCell();
+  }
+});
 
 init();
 </script>
