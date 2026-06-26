@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Bento Box Generator</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -279,6 +280,38 @@ select {
 .remove-section-btn:hover { background: #3e1515; }
 
 /* ── Modal ── */
+.help-btn {
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  border: 1.5px solid #444;
+  background: #2a2a2a;
+  color: #888;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: border-color 0.12s, color 0.12s;
+  line-height: 1;
+  padding: 0;
+}
+.help-btn:hover { border-color: #6366f1; color: #fff; }
+.help-steps { display: flex; flex-direction: column; gap: 0; }
+.help-step {
+  display: flex; gap: 12px; align-items: flex-start;
+  padding: 12px 0;
+  border-bottom: 1px solid #252525;
+}
+.help-num {
+  width: 22px; height: 22px; border-radius: 50%;
+  background: #6366f1; color: #fff;
+  font-size: 11px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; margin-top: 1px;
+}
+.help-step strong { display: block; font-size: 13px; color: #e0e0e0; margin-bottom: 3px; }
+.help-step p { font-size: 12px; color: #888; line-height: 1.5; margin: 0; }
+.help-step em { color: #aaa; font-style: normal; font-weight: 500; }
 .modal-overlay {
   position: fixed; inset: 0;
   background: rgba(0,0,0,0.72);
@@ -354,6 +387,7 @@ select {
   </div>
 
   <div style="flex:1"></div>
+  <button class="help-btn" onclick="showHelpModal()" title="How to use">?</button>
   <button class="btn primary" onclick="showExportModal()">Export Image ↓</button>
 </div>
 
@@ -368,7 +402,7 @@ select {
          ondragover="libDragOver(event)"
          ondrop="libDrop(event)"
          ondragleave="this.classList.remove('drag-over')">
-      <input type="file" id="fileInput" multiple accept="image/*" onchange="handleFiles(event)">
+      <input type="file" id="fileInput" multiple accept="image/*,.heic,.heif" onchange="handleFiles(event)">
       <div class="upload-icon">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <rect x="3" y="3" width="18" height="18" rx="2"/>
@@ -447,6 +481,67 @@ select {
         <button class="remove-section-btn" onclick="removeCell()">Delete Section</button>
       </div>
 
+    </div>
+  </div>
+</div>
+
+<!-- Help Modal -->
+<div class="modal-overlay" id="helpModal" style="display:none" onclick="if(event.target===this)hideHelpModal()">
+  <div class="modal" style="width:420px;max-height:80vh;overflow-y:auto">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+      <h2 style="margin:0">How to use</h2>
+      <button onclick="hideHelpModal()" style="background:none;border:none;color:#666;font-size:18px;cursor:pointer;line-height:1;padding:2px 6px">×</button>
+    </div>
+    <div class="help-steps">
+      <div class="help-step">
+        <div class="help-num">1</div>
+        <div>
+          <strong>Add photos</strong>
+          <p>Drag image files into the <em>Photos</em> panel on the left, or click it to browse. Photos land in your library and can be reused across multiple cells.</p>
+        </div>
+      </div>
+      <div class="help-step">
+        <div class="help-num">2</div>
+        <div>
+          <strong>Place photos</strong>
+          <p>Drag a photo from the library and drop it onto any bento cell. Drop a different photo on the same cell to swap it out.</p>
+        </div>
+      </div>
+      <div class="help-step">
+        <div class="help-num">3</div>
+        <div>
+          <strong>Resize cells</strong>
+          <p>Click a cell to select it, then drag the <em>corner handle</em> (bottom-right) to expand or shrink it. Any cells it grows over are automatically removed. You can also use the Width / Height +/− controls in the right panel.</p>
+        </div>
+      </div>
+      <div class="help-step">
+        <div class="help-num">4</div>
+        <div>
+          <strong>Pan &amp; zoom a photo</strong>
+          <p>Click a filled cell to select it. <em>Drag inside the cell</em> to pan the photo. <em>Scroll</em> over the cell to zoom. Fine-tune with the sliders in the right panel.</p>
+        </div>
+      </div>
+      <div class="help-step">
+        <div class="help-num">5</div>
+        <div>
+          <strong>Style a cell</strong>
+          <p>With a cell selected, use the right panel to change its <em>background color</em> and <em>corner radius</em>. Global controls in the top bar adjust gap, grid background, and outer corner radius.</p>
+        </div>
+      </div>
+      <div class="help-step">
+        <div class="help-num">6</div>
+        <div>
+          <strong>Export</strong>
+          <p>Click <em>Export Image ↓</em> to download your bento box. Choose PNG, JPEG, or WebP, set quality, and pick up to 4× resolution for high-res output.</p>
+        </div>
+      </div>
+      <div class="help-step" style="border-bottom:none">
+        <div class="help-num">7</div>
+        <div>
+          <strong>Preview zoom</strong>
+          <p>The <em>Preview zoom</em> slider in the top bar makes the canvas bigger or smaller on screen — it doesn't affect the exported image size.</p>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -886,10 +981,23 @@ function libDragOver(e) {
 function libDrop(e) {
   e.preventDefault();
   document.getElementById('uploadZone').classList.remove('drag-over');
-  Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/')).forEach(loadPhoto);
+  Array.from(e.dataTransfer.files)
+    .filter(f => f.type.startsWith('image/') || /\.heic$/i.test(f.name) || /\.heif$/i.test(f.name))
+    .forEach(loadPhoto);
+}
+
+function isHeic(file) {
+  return file.type === 'image/heic' || file.type === 'image/heif' ||
+    /\.heic$/i.test(file.name) || /\.heif$/i.test(file.name);
 }
 
 function loadPhoto(file) {
+  if (isHeic(file)) {
+    heic2any({ blob: file, toType: 'image/jpeg', quality: 0.92 })
+      .then(blob => loadPhoto(new File([blob], file.name.replace(/\.heic$/i, '.jpg'), { type: 'image/jpeg' })))
+      .catch(() => alert('Could not convert HEIC file: ' + file.name));
+    return;
+  }
   const reader = new FileReader();
   reader.onload = ev => {
     const photo = { id: ++photoCounter, src: ev.target.result, name: file.name };
@@ -940,6 +1048,8 @@ function assignPhoto(cellId, photoId) {
 // ──────────────────────────────────────────────
 function showExportModal() { document.getElementById('exportModal').style.display = 'flex'; }
 function hideExportModal() { document.getElementById('exportModal').style.display = 'none'; }
+function showHelpModal()   { document.getElementById('helpModal').style.display = 'flex'; }
+function hideHelpModal()   { document.getElementById('helpModal').style.display = 'none'; }
 
 function toggleQuality() {
   const fmt = document.getElementById('exportFmt').value;
