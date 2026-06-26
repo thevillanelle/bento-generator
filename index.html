@@ -3,21 +3,149 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Bento Box Generator</title>
+<title>Bento Box — BB</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* ── Theme Variables ── */
+:root {
+  --bg:            #0f0f0f;
+  --bg-bar:        #1a1a1a;
+  --bg-panel:      #161616;
+  --bg-input:      #2a2a2a;
+  --bg-input-h:    #333;
+  --bg-modal:      #1c1c1c;
+  --bg-editor:     #0f0f0f;
+  --bg-cell:       #2a2a2a;
+  --bg-thumb:      #222;
+  --border:        #2a2a2a;
+  --border-mid:    #3a3a3a;
+  --border-sub:    #252525;
+  --sep:           #333;
+  --text:          #fff;
+  --text-2:        #ccc;
+  --text-3:        #888;
+  --text-4:        #555;
+  --text-5:        #444;
+  --accent:        #6366f1;
+  --accent-h:      #5254cc;
+  --accent-glow:   rgba(99,102,241,0.45);
+  --accent-bg:     rgba(99,102,241,0.08);
+  --logo-a:        #a78bfa;
+  --logo-b:        #6366f1;
+}
+[data-theme="light"] {
+  --bg:            #f0f0f0;
+  --bg-bar:        #ffffff;
+  --bg-panel:      #f8f8f8;
+  --bg-input:      #ebebeb;
+  --bg-input-h:    #e0e0e0;
+  --bg-modal:      #ffffff;
+  --bg-editor:     #e4e4e4;
+  --bg-cell:       #e0e0e0;
+  --bg-thumb:      #d8d8d8;
+  --border:        #ddd;
+  --border-mid:    #ccc;
+  --border-sub:    #e8e8e8;
+  --sep:           #ddd;
+  --text:          #111;
+  --text-2:        #333;
+  --text-3:        #666;
+  --text-4:        #aaa;
+  --text-5:        #bbb;
+  --accent:        #6366f1;
+  --accent-h:      #5254cc;
+  --accent-glow:   rgba(99,102,241,0.3);
+  --accent-bg:     rgba(99,102,241,0.08);
+  --logo-a:        #818cf8;
+  --logo-b:        #6366f1;
+}
+[data-theme="bb"] {
+  --bg:            #f4eeff;
+  --bg-bar:        #ffffff;
+  --bg-panel:      #fdfaff;
+  --bg-input:      #ede3fa;
+  --bg-input-h:    #e3d6f5;
+  --bg-modal:      #ffffff;
+  --bg-editor:     #ece4f8;
+  --bg-cell:       #e8dcf8;
+  --bg-thumb:      #ddd0f2;
+  --border:        #ddd0f0;
+  --border-mid:    #cdc0e4;
+  --border-sub:    #eae0f8;
+  --sep:           #ddd0f0;
+  --text:          #1a1030;
+  --text-2:        #3a2860;
+  --text-3:        #7060a0;
+  --text-4:        #b8a8d4;
+  --text-5:        #cec0e4;
+  --accent:        #ff6b35;
+  --accent-h:      #e8561f;
+  --accent-glow:   rgba(255,107,53,0.35);
+  --accent-bg:     rgba(255,107,53,0.08);
+  --logo-a:        #ff9a5c;
+  --logo-b:        #ff6b35;
+}
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  background: #0f0f0f;
-  color: #fff;
+  background: var(--bg);
+  color: var(--text);
   height: 100vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  transition: background 0.2s, color 0.2s;
 }
+
+/* ── Logo ── */
+.bb-logo {
+  display: flex; align-items: baseline; gap: 5px; flex-shrink: 0;
+}
+.bb-logo-mark {
+  font-size: 22px;
+  font-weight: 900;
+  font-family: 'Arial Rounded MT Bold', 'Nunito', 'Arial Black', sans-serif;
+  background: linear-gradient(150deg, var(--logo-a), var(--logo-b));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 2px 6px color-mix(in srgb, var(--logo-b) 40%, transparent));
+  letter-spacing: -2px;
+  line-height: 1;
+}
+.bb-logo-sub {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-3);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* ── Theme switcher ── */
+.theme-switcher {
+  display: flex; gap: 3px; align-items: center;
+  background: var(--bg-input);
+  border: 1px solid var(--border-mid);
+  border-radius: 8px;
+  padding: 3px;
+}
+.theme-btn {
+  padding: 3px 8px;
+  border-radius: 5px;
+  border: none;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+  transition: background 0.12s, color 0.12s;
+  white-space: nowrap;
+}
+.theme-btn:hover { color: var(--text); }
+.theme-btn.active { background: var(--accent); color: #fff; }
 
 /* ── Top Bar ── */
 .topbar {
@@ -25,49 +153,49 @@ body {
   align-items: center;
   gap: 10px;
   padding: 8px 14px;
-  background: #1a1a1a;
-  border-bottom: 1px solid #2a2a2a;
+  background: var(--bg-bar);
+  border-bottom: 1px solid var(--border);
   flex-shrink: 0;
   flex-wrap: wrap;
+  transition: background 0.2s, border-color 0.2s;
 }
-.topbar h1 { font-size: 15px; font-weight: 700; letter-spacing: -0.02em; margin-right: 4px; }
-.topbar-sep { width: 1px; height: 20px; background: #333; flex-shrink: 0; }
-.ctrl { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #888; }
+.topbar-sep { width: 1px; height: 20px; background: var(--sep); flex-shrink: 0; }
+.ctrl { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-3); }
 .ctrl label { white-space: nowrap; }
-.ctrl input[type=range] { width: 72px; accent-color: #6366f1; cursor: pointer; }
+.ctrl input[type=range] { width: 72px; accent-color: var(--accent); cursor: pointer; }
 .ctrl input[type=color] {
   width: 28px; height: 24px;
-  border: 1px solid #444; border-radius: 4px;
+  border: 1px solid var(--border-mid); border-radius: 4px;
   cursor: pointer; background: none; padding: 1px;
 }
 .ctrl input[type=number] {
   width: 46px; padding: 4px 6px;
-  background: #2a2a2a; border: 1px solid #3a3a3a;
-  border-radius: 5px; color: #fff; font-size: 12px;
+  background: var(--bg-input); border: 1px solid var(--border-mid);
+  border-radius: 5px; color: var(--text); font-size: 12px;
 }
 select {
   padding: 4px 7px;
   border-radius: 5px;
-  border: 1px solid #3a3a3a;
-  background: #2a2a2a;
-  color: #fff;
+  border: 1px solid var(--border-mid);
+  background: var(--bg-input);
+  color: var(--text);
   font-size: 12px;
   cursor: pointer;
 }
 .btn {
   padding: 5px 11px;
   border-radius: 6px;
-  border: 1px solid #3a3a3a;
-  background: #2a2a2a;
-  color: #ccc;
+  border: 1px solid var(--border-mid);
+  background: var(--bg-input);
+  color: var(--text-2);
   cursor: pointer;
   font-size: 12px;
   transition: background 0.12s, color 0.12s;
   white-space: nowrap;
 }
-.btn:hover { background: #333; color: #fff; }
-.btn.primary { background: #6366f1; border-color: #6366f1; color: #fff; }
-.btn.primary:hover { background: #5254cc; }
+.btn:hover { background: var(--bg-input-h); color: var(--text); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary:hover { background: var(--accent-h); }
 
 /* ── Main ── */
 .main { display: flex; flex: 1; overflow: hidden; }
@@ -76,39 +204,40 @@ select {
 .library {
   width: 186px;
   flex-shrink: 0;
-  background: #161616;
-  border-right: 1px solid #2a2a2a;
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  transition: background 0.2s, border-color 0.2s;
 }
 .panel-header {
   padding: 10px 12px 6px;
   font-size: 10px;
   font-weight: 700;
-  color: #555;
+  color: var(--text-4);
   text-transform: uppercase;
   letter-spacing: 0.07em;
-  border-bottom: 1px solid #222;
+  border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
 .upload-zone {
   margin: 10px;
-  border: 1.5px dashed #333;
+  border: 1.5px dashed var(--border-mid);
   border-radius: 8px;
   padding: 14px 8px;
   text-align: center;
   cursor: pointer;
   font-size: 11px;
-  color: #555;
+  color: var(--text-4);
   transition: border-color 0.15s, background 0.15s;
   flex-shrink: 0;
   user-select: none;
 }
 .upload-zone:hover, .upload-zone.drag-over {
-  border-color: #6366f1;
-  background: rgba(99,102,241,0.07);
-  color: #999;
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  color: var(--text-3);
 }
 .upload-zone input { display: none; }
 .upload-icon { opacity: 0.4; margin-bottom: 6px; }
@@ -129,9 +258,9 @@ select {
   border: 2px solid transparent;
   transition: border-color 0.12s;
   position: relative;
-  background: #222;
+  background: var(--bg-thumb);
 }
-.photo-thumb:hover { border-color: #6366f1; }
+.photo-thumb:hover { border-color: var(--accent); }
 .photo-thumb.dragging { opacity: 0.35; cursor: grabbing; }
 .photo-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .thumb-remove {
@@ -154,22 +283,24 @@ select {
   justify-content: center;
   overflow: auto;
   padding: 28px;
-  background: #0f0f0f;
+  background: var(--bg-editor);
+  transition: background 0.2s;
 }
 .bento-grid {
   display: grid;
-  background: #1a1a1a;
+  background: var(--bg-bar);
   border-radius: 14px;
   overflow: hidden;
   flex-shrink: 0;
+  transition: background 0.2s;
 }
 .bento-cell {
   position: relative;
   overflow: hidden;
   cursor: pointer;
-  background: #2a2a2a;
+  background: var(--bg-cell);
   min-width: 0; min-height: 0;
-  transition: outline 0.08s;
+  transition: outline 0.08s, background 0.2s;
   user-select: none;
 }
 .bento-cell::after {
@@ -182,8 +313,8 @@ select {
   pointer-events: none;
   z-index: 10;
 }
-.bento-cell:hover::after { outline-color: rgba(99,102,241,0.45); }
-.bento-cell.selected::after { outline-color: #6366f1; }
+.bento-cell:hover::after { outline-color: var(--accent-glow); }
+.bento-cell.selected::after { outline-color: var(--accent); }
 .bento-cell.drop-target::after { outline-color: #10b981; }
 .bento-cell.drop-target { background: rgba(16,185,129,0.08) !important; }
 .cell-bg {
@@ -198,7 +329,7 @@ select {
   position: absolute; inset: 0;
   display: flex; flex-direction: column;
   align-items: center; justify-content: center;
-  color: #444; font-size: 11px; gap: 5px;
+  color: var(--text-4); font-size: 11px; gap: 5px;
   pointer-events: none;
 }
 .bento-cell.has-photo .cell-placeholder { display: none; }
@@ -214,8 +345,8 @@ select {
   content: '';
   position: absolute; bottom: 4px; right: 4px;
   width: 7px; height: 7px;
-  border-right: 2px solid #6366f1;
-  border-bottom: 2px solid #6366f1;
+  border-right: 2px solid var(--accent);
+  border-bottom: 2px solid var(--accent);
   border-radius: 1px;
 }
 
@@ -223,15 +354,16 @@ select {
 .properties {
   width: 210px;
   flex-shrink: 0;
-  background: #161616;
-  border-left: 1px solid #2a2a2a;
+  background: var(--bg-panel);
+  border-left: 1px solid var(--border);
   overflow-y: auto;
   padding: 14px;
+  transition: background 0.2s, border-color 0.2s;
 }
-.props-empty { color: #444; font-size: 12px; text-align: center; padding: 24px 0; }
+.props-empty { color: var(--text-5); font-size: 12px; text-align: center; padding: 24px 0; }
 .prop-section { margin-bottom: 18px; }
 .prop-section-title {
-  font-size: 10px; font-weight: 700; color: #555;
+  font-size: 10px; font-weight: 700; color: var(--text-4);
   text-transform: uppercase; letter-spacing: 0.07em;
   margin-bottom: 10px;
 }
@@ -241,35 +373,35 @@ select {
   margin-bottom: 9px;
   font-size: 12px;
 }
-.prop-row label { color: #777; font-size: 11px; }
-.prop-row input[type=range] { width: 90px; accent-color: #6366f1; cursor: pointer; }
+.prop-row label { color: var(--text-3); font-size: 11px; }
+.prop-row input[type=range] { width: 90px; accent-color: var(--accent); cursor: pointer; }
 .prop-row input[type=color] {
   width: 30px; height: 22px;
-  border: 1px solid #3a3a3a; border-radius: 4px;
+  border: 1px solid var(--border-mid); border-radius: 4px;
   cursor: pointer; background: none; padding: 1px;
 }
 .span-control { display: flex; align-items: center; gap: 5px; }
 .span-btn {
   width: 22px; height: 22px;
   border-radius: 4px;
-  border: 1px solid #3a3a3a;
-  background: #252525;
-  color: #ccc;
+  border: 1px solid var(--border-mid);
+  background: var(--bg-input);
+  color: var(--text-2);
   cursor: pointer; font-size: 13px;
   display: flex; align-items: center; justify-content: center;
   transition: background 0.1s;
   line-height: 1;
 }
-.span-btn:hover { background: #333; color: #fff; }
-.span-val { min-width: 18px; text-align: center; font-size: 12px; color: #ccc; }
+.span-btn:hover { background: var(--bg-input-h); color: var(--text); }
+.span-val { min-width: 18px; text-align: center; font-size: 12px; color: var(--text-2); }
 .remove-cell-photo {
   width: 100%; padding: 5px;
-  border-radius: 5px; border: 1px solid #3a3a3a;
-  background: #252525; color: #cc5555;
+  border-radius: 5px; border: 1px solid var(--border-mid);
+  background: var(--bg-input); color: #cc5555;
   cursor: pointer; font-size: 11px;
   transition: background 0.1s;
 }
-.remove-cell-photo:hover { background: #2e1a1a; }
+.remove-cell-photo:hover { background: #2e1a1a; color: #ff6b6b; }
 .remove-section-btn {
   width: 100%; padding: 5px;
   border-radius: 5px; border: 1px solid #4a2020;
@@ -279,39 +411,41 @@ select {
 }
 .remove-section-btn:hover { background: #3e1515; }
 
-/* ── Modal ── */
+/* ── Help button ── */
 .help-btn {
   width: 26px; height: 26px;
   border-radius: 50%;
-  border: 1.5px solid #444;
-  background: #2a2a2a;
-  color: #888;
+  border: 1.5px solid var(--border-mid);
+  background: var(--bg-input);
+  color: var(--text-3);
   cursor: pointer;
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 13px; font-weight: 700;
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
   transition: border-color 0.12s, color 0.12s;
-  line-height: 1;
-  padding: 0;
+  line-height: 1; padding: 0;
 }
-.help-btn:hover { border-color: #6366f1; color: #fff; }
+.help-btn:hover { border-color: var(--accent); color: var(--text); }
+
+/* ── Help modal content ── */
 .help-steps { display: flex; flex-direction: column; gap: 0; }
 .help-step {
   display: flex; gap: 12px; align-items: flex-start;
   padding: 12px 0;
-  border-bottom: 1px solid #252525;
+  border-bottom: 1px solid var(--border-sub);
 }
 .help-num {
   width: 22px; height: 22px; border-radius: 50%;
-  background: #6366f1; color: #fff;
+  background: var(--accent); color: #fff;
   font-size: 11px; font-weight: 700;
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0; margin-top: 1px;
 }
-.help-step strong { display: block; font-size: 13px; color: #e0e0e0; margin-bottom: 3px; }
-.help-step p { font-size: 12px; color: #888; line-height: 1.5; margin: 0; }
-.help-step em { color: #aaa; font-style: normal; font-weight: 500; }
+.help-step strong { display: block; font-size: 13px; color: var(--text); margin-bottom: 3px; }
+.help-step p { font-size: 12px; color: var(--text-3); line-height: 1.5; margin: 0; }
+.help-step em { color: var(--text-2); font-style: normal; font-weight: 500; }
+
+/* ── Modal ── */
 .modal-overlay {
   position: fixed; inset: 0;
   background: rgba(0,0,0,0.72);
@@ -320,18 +454,20 @@ select {
   backdrop-filter: blur(4px);
 }
 .modal {
-  background: #1c1c1c;
-  border: 1px solid #2e2e2e;
+  background: var(--bg-modal);
+  border: 1px solid var(--border-mid);
   border-radius: 14px;
   padding: 24px;
   width: 300px;
-  box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+  box-shadow: 0 24px 64px rgba(0,0,0,0.4);
+  color: var(--text);
 }
 .modal h2 { font-size: 15px; margin-bottom: 16px; }
 .modal-row { margin-bottom: 12px; }
-.modal-row label { display: block; font-size: 11px; color: #777; margin-bottom: 4px; }
+.modal-row label { display: block; font-size: 11px; color: var(--text-3); margin-bottom: 4px; }
 .modal-row select, .modal-row input[type=range] { width: 100%; }
-.modal-row input[type=range] { accent-color: #6366f1; }
+.modal-row select { background: var(--bg-input); border-color: var(--border-mid); color: var(--text); }
+.modal-row input[type=range] { accent-color: var(--accent); }
 .modal-actions { display: flex; gap: 8px; margin-top: 18px; justify-content: flex-end; }
 </style>
 </head>
@@ -339,7 +475,17 @@ select {
 
 <!-- Top Bar -->
 <div class="topbar">
-  <h1>Bento Generator</h1>
+  <div class="bb-logo">
+    <span class="bb-logo-mark">BB</span>
+    <span class="bb-logo-sub">Bento Box</span>
+  </div>
+  <div class="topbar-sep"></div>
+
+  <div class="theme-switcher">
+    <button class="theme-btn active" id="btn-dark"  onclick="setTheme('dark')">🌙 Dark</button>
+    <button class="theme-btn"        id="btn-light" onclick="setTheme('light')">☀️ Light</button>
+    <button class="theme-btn"        id="btn-bb"    onclick="setTheme('bb')">🫧 BB</button>
+  </div>
   <div class="topbar-sep"></div>
 
   <div class="ctrl">
@@ -638,6 +784,11 @@ const LAYOUTS = {
 // ──────────────────────────────────────────────
 // Init
 // ──────────────────────────────────────────────
+function setTheme(name) {
+  document.documentElement.dataset.theme = name === 'dark' ? '' : name;
+  ['dark','light','bb'].forEach(t => document.getElementById('btn-'+t).classList.toggle('active', t === name));
+}
+
 function init() { applyLayout('classic'); }
 
 function applyLayout(name) {
