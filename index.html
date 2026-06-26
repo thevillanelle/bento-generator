@@ -403,7 +403,26 @@ select {
   border: 1px solid var(--border-mid); border-radius: 4px;
   cursor: pointer; background: none; padding: 1px;
 }
-.span-control { display: flex; align-items: center; gap: 5px; }
+.shape-picker {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 5px;
+}
+.shape-btn {
+  aspect-ratio: 1;
+  border-radius: 6px;
+  border: 1.5px solid var(--border-mid);
+  background: var(--bg-input);
+  cursor: pointer;
+  padding: 5px;
+  display: flex; align-items: center; justify-content: center;
+  transition: border-color 0.12s, background 0.12s;
+}
+.shape-btn svg { width: 100%; height: 100%; fill: var(--text-3); transition: fill 0.12s; }
+.shape-btn:hover { border-color: var(--accent); background: var(--accent-bg); }
+.shape-btn:hover svg { fill: var(--accent); }
+.shape-btn.active { border-color: var(--accent); background: var(--accent-bg); }
+.shape-btn.active svg { fill: var(--accent); }
 .span-btn {
   width: 22px; height: 22px;
   border-radius: 4px;
@@ -550,9 +569,9 @@ select {
   </div>
 
   <div class="ctrl">
-    <label>Corner</label>
-    <input type="range" id="gridRadiusSlider" min="0" max="32" value="14" oninput="updateGridRadius(this.value)">
-    <span id="gridRadiusVal">14px</span>
+    <label>Corners</label>
+    <input type="range" id="gridRadiusSlider" min="0" max="40" value="12" oninput="updateGridRadius(this.value)">
+    <span id="gridRadiusVal">12px</span>
   </div>
 
   <div style="flex:1"></div>
@@ -622,8 +641,32 @@ select {
         </div>
         <div class="prop-row">
           <label>Corner</label>
-          <input type="range" id="cellRadius" min="0" max="40" value="0" oninput="applyCellRadius(this.value)">
-          <span id="cellRadiusVal">0px</span>
+          <input type="range" id="cellRadius" min="0" max="40" value="12" oninput="applyCellRadius(this.value)">
+          <span id="cellRadiusVal">12px</span>
+        </div>
+      </div>
+
+      <div class="prop-section">
+        <div class="prop-section-title">Shape</div>
+        <div class="shape-picker" id="shapePicker">
+          <button class="shape-btn active" data-shape="rounded" onclick="applyShape('rounded')" title="Rounded">
+            <svg viewBox="0 0 28 28"><rect x="3" y="3" width="22" height="22" rx="5" ry="5"/></svg>
+          </button>
+          <button class="shape-btn" data-shape="rect" onclick="applyShape('rect')" title="Square">
+            <svg viewBox="0 0 28 28"><rect x="3" y="3" width="22" height="22" rx="1" ry="1"/></svg>
+          </button>
+          <button class="shape-btn" data-shape="circle" onclick="applyShape('circle')" title="Circle">
+            <svg viewBox="0 0 28 28"><circle cx="14" cy="14" r="11"/></svg>
+          </button>
+          <button class="shape-btn" data-shape="squircle" onclick="applyShape('squircle')" title="Squircle">
+            <svg viewBox="0 0 28 28"><path d="M14 3C7 3 3 7 3 14s4 11 11 11 11-4 11-11S21 3 14 3z"/></svg>
+          </button>
+          <button class="shape-btn" data-shape="diamond" onclick="applyShape('diamond')" title="Diamond">
+            <svg viewBox="0 0 28 28"><polygon points="14,2 26,14 14,26 2,14"/></svg>
+          </button>
+          <button class="shape-btn" data-shape="hex" onclick="applyShape('hex')" title="Hexagon">
+            <svg viewBox="0 0 28 28"><polygon points="14,2 25,8 25,20 14,26 3,20 3,8"/></svg>
+          </button>
         </div>
       </div>
 
@@ -755,7 +798,7 @@ select {
 let photos = [];
 let cells = [];
 let gridCols = 4, gridRows = 3;
-let cellSize = 140, gap = 8, gridRadius = 14;
+let cellSize = 140, gap = 8, gridRadius = 12;
 let selectedId = null;
 let dragPhotoId = null;
 let photoCounter = 0, cellCounter = 0;
@@ -834,7 +877,8 @@ function applyLayout(name) {
       zoom: o.zoom ?? 100,
       panX: o.panX ?? 0, panY: o.panY ?? 0,
       bg: o.bg ?? '#2a2a2a',
-      radius: o.radius ?? 0
+      radius: o.radius ?? 12,
+      shape:  o.shape  ?? 'rounded'
     };
   });
   selectedId = null;
@@ -848,7 +892,7 @@ function rebuildCustomGrid() {
   for (let r = 1; r <= gridRows; r++)
     for (let c = 1; c <= gridCols; c++)
       cells.push({ id: ++cellCounter, col: c, row: r, colSpan: 1, rowSpan: 1,
-                   photoId: null, zoom: 100, panX: 0, panY: 0, bg: '#2a2a2a', radius: 0 });
+                   photoId: null, zoom: 100, panX: 0, panY: 0, bg: '#2a2a2a', radius: 12, shape: 'rounded' });
   selectedId = null;
   render(); syncProps();
 }
@@ -872,7 +916,7 @@ function render() {
     el.style.gridColumn  = `${cell.col} / span ${cell.colSpan}`;
     el.style.gridRow     = `${cell.row} / span ${cell.rowSpan}`;
     el.style.background  = cell.bg;
-    el.style.borderRadius = cell.radius + 'px';
+    applyShapeToEl(el, cell);
 
     // Photo
     if (cell.photoId) {
@@ -979,7 +1023,7 @@ function render() {
       add.addEventListener('click', e => {
         e.stopPropagation();
         cells.push({ id: ++cellCounter, col, row, colSpan: 1, rowSpan: 1,
-                     photoId: null, zoom: 100, panX: 0, panY: 0, bg: '', radius: 0 });
+                     photoId: null, zoom: 100, panX: 0, panY: 0, bg: '', radius: 12, shape: 'rounded' });
         render(); syncProps();
       });
       grid.appendChild(add);
@@ -1064,9 +1108,15 @@ function syncProps() {
   empty.style.display='none'; content.style.display='block';
   document.getElementById('colSpanVal').textContent = cell.colSpan;
   document.getElementById('rowSpanVal').textContent = cell.rowSpan;
-  document.getElementById('cellBg').value    = cell.bg;
+  document.getElementById('cellBg').value    = cell.bg || '#2a2a2a';
   document.getElementById('cellRadius').value = cell.radius;
   document.getElementById('cellRadiusVal').textContent = cell.radius + 'px';
+  // Sync shape picker
+  const shape = cell.shape || 'rounded';
+  document.querySelectorAll('.shape-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.shape === shape));
+  const cornerRow = document.getElementById('cellRadius').closest('.prop-row');
+  cornerRow.style.display = ['circle','diamond','hex'].includes(shape) ? 'none' : 'flex';
   const ps = document.getElementById('photoSection');
   if (cell.photoId) {
     ps.style.display = 'block';
@@ -1104,7 +1154,7 @@ function applyCellRadius(val) {
   cell.radius = parseInt(val);
   document.getElementById('cellRadiusVal').textContent = val + 'px';
   const el = document.querySelector(`[data-id="${selectedId}"]`);
-  if (el) el.style.borderRadius = val + 'px';
+  if (el) applyShapeToEl(el, cell);
 }
 
 function applyPhotoZoom(val) {
@@ -1163,6 +1213,41 @@ function updateGridRadius(val) {
   gridRadius = parseInt(val);
   document.getElementById('gridRadiusVal').textContent = val + 'px';
   document.getElementById('bentoGrid').style.borderRadius = val + 'px';
+  // Also update all tiles that use radius-based shapes
+  cells.forEach(cell => {
+    if (cell.shape === 'rounded' || cell.shape === 'rect') cell.radius = gridRadius;
+  });
+  render();
+  if (selectedId) syncProps();
+}
+
+// ── Shape helpers ──────────────────────────────
+function applyShapeToEl(el, cell) {
+  const r = cell.radius;
+  el.style.clipPath    = '';
+  el.style.borderRadius = '0';
+  switch (cell.shape) {
+    case 'rect':     el.style.borderRadius = '0'; break;
+    case 'rounded':  el.style.borderRadius = r + 'px'; break;
+    case 'circle':   el.style.borderRadius = '50%'; break;
+    case 'squircle': el.style.borderRadius = Math.round(r * 2.5 + 20) + '%'; break;
+    case 'diamond':  el.style.clipPath = 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)'; break;
+    case 'hex':      el.style.clipPath = 'polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)'; break;
+  }
+}
+
+function applyShape(shape) {
+  const cell = cells.find(c => c.id === selectedId);
+  if (!cell) return;
+  cell.shape = shape;
+  const el = document.querySelector(`[data-id="${selectedId}"]`);
+  if (el) applyShapeToEl(el, cell);
+  // Update picker highlight
+  document.querySelectorAll('.shape-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.shape === shape));
+  // Show/hide corner slider (not relevant for circle/diamond/hex)
+  const cornerRow = document.getElementById('cellRadius').closest('.prop-row');
+  cornerRow.style.display = ['circle','diamond','hex'].includes(shape) ? 'none' : 'flex';
 }
 
 // ──────────────────────────────────────────────
