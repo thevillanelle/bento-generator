@@ -241,6 +241,18 @@ select {
 }
 .upload-zone input { display: none; }
 .upload-icon { opacity: 0.4; margin-bottom: 6px; }
+.library-actions {
+  display: flex;
+  gap: 6px;
+  margin: 0 10px 8px;
+  flex-shrink: 0;
+}
+.library-action-btn {
+  flex: 1;
+  font-size: 10px;
+  padding: 5px 0;
+  text-align: center;
+}
 .photo-grid {
   flex: 1;
   overflow-y: auto;
@@ -628,10 +640,8 @@ select {
   </div>
 
   <div style="flex:1"></div>
-  <button class="help-btn" onclick="showHelpModal()" title="How to use">?</button>
-  <button class="btn" onclick="loadProject()" title="Load a saved .bb project file">Load ↑</button>
-  <button class="btn" onclick="saveProject()" title="Save project as .bb file">Save ↓</button>
   <button class="btn primary" onclick="showExportModal()">Export Image ↓</button>
+  <button class="help-btn" onclick="showHelpModal()" title="How to use">?</button>
 </div>
 
 <!-- Main -->
@@ -654,6 +664,10 @@ select {
         </svg>
       </div>
       <div>Drop or click<br>to add photos</div>
+    </div>
+    <div class="library-actions">
+      <button class="btn library-action-btn" onclick="loadProject()" title="Load a saved .bb project file">Load ↑</button>
+      <button class="btn library-action-btn" onclick="saveProject()" title="Save project as .bb file">Save ↓</button>
     </div>
     <div class="photo-grid" id="photoGrid"></div>
   </div>
@@ -764,7 +778,7 @@ select {
         <div class="help-num">1</div>
         <div>
           <strong>Add photos</strong>
-          <p>Drag image files into the <em>Photos</em> panel on the left, or click it to browse. Photos land in your library and can be reused across multiple cells.</p>
+          <p>Drag image files into the <em>Photos</em> panel on the left, or click it to browse. Photos land in your library and can be reused across multiple cells. HEIC/HEIF is supported.</p>
         </div>
       </div>
       <div class="help-step">
@@ -778,7 +792,7 @@ select {
         <div class="help-num">3</div>
         <div>
           <strong>Resize cells</strong>
-          <p>Click a cell to select it, then drag the <em>corner handle</em> (bottom-right) to expand or shrink it. Any cells it grows over are automatically removed. You can also use the Width / Height +/− controls in the right panel.</p>
+          <p>Click a cell to select it, then drag the <em>corner handle</em> (bottom-right) to expand or shrink it. Any cells it grows over are automatically removed. Use the Width / Height +/− controls in the right panel for precise control.</p>
         </div>
       </div>
       <div class="help-step">
@@ -792,18 +806,32 @@ select {
         <div class="help-num">5</div>
         <div>
           <strong>Style a cell</strong>
-          <p>With a cell selected, use the right panel to change its <em>background color</em> and <em>corner radius</em>. Global controls in the top bar adjust gap, grid background, and outer corner radius.</p>
+          <p>With a cell selected, use the right panel to change its <em>background color</em>, <em>shape</em>, and <em>corner radius</em>. Global controls in the top bar adjust gap, grid background, and outer corner radius.</p>
         </div>
       </div>
       <div class="help-step">
         <div class="help-num">6</div>
         <div>
+          <strong>Delete &amp; undo</strong>
+          <p>Click the <em>×</em> on any cell to remove it, or select a cell and press <em>Delete / Backspace</em>. Press <em>Cmd/Ctrl + Z</em> to undo any change — up to 40 steps back.</p>
+        </div>
+      </div>
+      <div class="help-step">
+        <div class="help-num">7</div>
+        <div>
+          <strong>Save &amp; load your project</strong>
+          <p>Use <em>Save ↓</em> in the Photos panel to download your whole layout (photos + positions) as a <code>.bb</code> file. Use <em>Load ↑</em> anytime to restore it exactly as you left it.</p>
+        </div>
+      </div>
+      <div class="help-step">
+        <div class="help-num">8</div>
+        <div>
           <strong>Export</strong>
-          <p>Click <em>Export Image ↓</em> to download your bento box. Choose PNG, JPEG, or WebP, set quality, and pick up to 4× resolution for high-res output.</p>
+          <p>Click <em>Export Image ↓</em> to download your bento box. Choose PNG, JPEG, or WebP, set quality, and pick a canvas size — <em>1:1</em>, <em>4:5 Portrait</em>, <em>9:16 Story</em>, <em>16:9 Wide</em> — or enter custom pixel dimensions. Scale up to 4× for high-res output.</p>
         </div>
       </div>
       <div class="help-step" style="border-bottom:none">
-        <div class="help-num">7</div>
+        <div class="help-num">9</div>
         <div>
           <strong>Preview zoom</strong>
           <p>The <em>Preview zoom</em> slider in the top bar makes the canvas bigger or smaller on screen — it doesn't affect the exported image size.</p>
