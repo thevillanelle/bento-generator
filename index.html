@@ -699,9 +699,20 @@ function imgTransform(cell) {
 // ──────────────────────────────────────────────
 // Resize handle drag
 // ──────────────────────────────────────────────
+function cellsOverlap(a, b) {
+  return (
+    a.col < b.col + b.colSpan &&
+    b.col < a.col + a.colSpan &&
+    a.row < b.row + b.rowSpan &&
+    b.row < a.row + a.rowSpan
+  );
+}
+
 function startResize(cell, el) {
   return function(e) {
     e.preventDefault(); e.stopPropagation();
+    // Bring resizing cell to front so it visually covers others during drag
+    el.style.zIndex = '50';
     const grid = document.getElementById('bentoGrid');
     const gridRect = grid.getBoundingClientRect();
     const colW = (gridRect.width  - gap * (gridCols - 1)) / gridCols;
@@ -716,7 +727,6 @@ function startResize(cell, el) {
         Math.round((relY - (cell.row - 1) * (rowH + gap)) / (rowH + gap))));
       if (newCS !== cell.colSpan || newRS !== cell.rowSpan) {
         cell.colSpan = newCS; cell.rowSpan = newRS;
-        // Update CSS directly — no full re-render during drag
         const cellEl = document.querySelector(`[data-id="${cell.id}"]`);
         if (cellEl) {
           cellEl.style.gridColumn = `${cell.col} / span ${cell.colSpan}`;
@@ -729,7 +739,9 @@ function startResize(cell, el) {
     const onUp = () => {
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
-      render(); syncProps(); // full rebuild only on release
+      // Consume any cells overlapped by the resized cell
+      cells = cells.filter(c => c.id === cell.id || !cellsOverlap(cell, c));
+      render(); syncProps();
     };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
@@ -779,6 +791,7 @@ function adjustSpan(axis, delta) {
     cell.colSpan = clamp(cell.colSpan + delta, 1, gridCols - cell.col + 1);
   else
     cell.rowSpan = clamp(cell.rowSpan + delta, 1, gridRows - cell.row + 1);
+  cells = cells.filter(c => c.id === cell.id || !cellsOverlap(cell, c));
   render(); syncProps();
 }
 
