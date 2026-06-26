@@ -13,15 +13,47 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install tidy
-        run: sudo apt-get install -y tidy
-
-      - name: Check HTML
+      - name: Check HTML structure
         run: |
-          tidy -errors -quiet index.html
-          code=$?
-          if [ $code -gt 1 ]; then
-            echo "❌ HTML errors found — fix before merging"
-            exit 1
-          fi
-          echo "✅ HTML valid"
+          python3 - <<'EOF'
+          import sys
+          from html.parser import HTMLParser
+
+          VOID = {'area','base','br','col','embed','hr','img','input',
+                  'link','meta','param','source','track','wbr'}
+          # These elements handle their own nesting rules
+          RAW  = {'script','style'}
+
+          class StructureChecker(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.stack  = []
+                  self.errors = []
+              def handle_starttag(self, tag, attrs):
+                  if tag not in VOID and tag not in RAW:
+                      self.stack.append(tag)
+              def handle_endtag(self, tag):
+                  if tag in VOID or tag in RAW:
+                      return
+                  if self.stack and self.stack[-1] == tag:
+                      self.stack.pop()
+                  else:
+                      ctx = self.stack[-5:] if self.stack else []
+                      self.errors.append(
+                          f'Unexpected </{tag}> — open tags: {ctx}')
+
+          with open('index.html', encoding='utf-8', errors='replace') as f:
+              html = f.read()
+
+          checker = StructureChecker()
+          checker.feed(html)
+
+          if checker.errors:
+              for e in checker.errors:
+                  print('ERROR:', e)
+              sys.exit(1)
+          if checker.stack:
+              print('ERROR: Unclosed tags:', checker.stack[-10:])
+              sys.exit(1)
+          print('✅ HTML structure OK')
+          EOF

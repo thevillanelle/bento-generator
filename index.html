@@ -624,6 +624,26 @@ select {
   <div class="topbar-sep"></div>
 
   <div class="ctrl">
+    <label>Canvas</label>
+    <select id="canvasPresetPicker" onchange="setCanvasPreset(this.value)">
+      <option value="free">Free</option>
+      <option value="1:1">1:1</option>
+      <option value="4:5">4:5</option>
+      <option value="9:16">9:16</option>
+      <option value="16:9">16:9</option>
+      <option value="custom">Custom…</option>
+    </select>
+  </div>
+
+  <div class="ctrl" id="canvasCustomCtrl" style="display:none">
+    <input type="number" id="canvasCustomW" value="1080" min="100" max="8000" oninput="setCanvasCustomDim()" style="width:52px">
+    <span>×</span>
+    <input type="number" id="canvasCustomH" value="1080" min="100" max="8000" oninput="setCanvasCustomDim()" style="width:52px">
+  </div>
+
+  <div class="topbar-sep"></div>
+
+  <div class="ctrl">
     <label>Preview zoom</label>
     <input type="range" id="cellSizeSlider" min="80" max="220" value="140" oninput="updateCellSize(this.value)">
     <span id="cellSizeVal">140px</span>
@@ -921,6 +941,8 @@ let photos = [];
 let cells = [];
 let gridCols = 4, gridRows = 3;
 let cellSize = 140, gap = 8, gridRadius = 12;
+let canvasPreset = 'free';
+let canvasCustomW = 1080, canvasCustomH = 1080;
 let selectedId = null;
 let dragPhotoId = null;
 let photoCounter = 0, cellCounter = 0;
@@ -1024,8 +1046,21 @@ function rebuildCustomGrid() {
 // ──────────────────────────────────────────────
 function render() {
   const grid = document.getElementById('bentoGrid');
-  grid.style.gridTemplateColumns = `repeat(${gridCols}, ${cellSize}px)`;
-  grid.style.gridTemplateRows    = `repeat(${gridRows}, ${cellSize}px)`;
+  const ratio = getCanvasRatio();
+  if (ratio) {
+    const [rw, rh] = ratio;
+    const totalW = gridCols * cellSize + (gridCols - 1) * gap;
+    const totalH = Math.round(totalW * rh / rw);
+    grid.style.width  = totalW + 'px';
+    grid.style.height = totalH + 'px';
+    grid.style.gridTemplateColumns = `repeat(${gridCols}, 1fr)`;
+    grid.style.gridTemplateRows    = `repeat(${gridRows}, 1fr)`;
+  } else {
+    grid.style.width  = '';
+    grid.style.height = '';
+    grid.style.gridTemplateColumns = `repeat(${gridCols}, ${cellSize}px)`;
+    grid.style.gridTemplateRows    = `repeat(${gridRows}, ${cellSize}px)`;
+  }
   grid.style.gap = gap + 'px';
   grid.style.borderRadius = gridRadius + 'px';
 
@@ -1329,14 +1364,63 @@ function removeCell() {
 }
 
 // ──────────────────────────────────────────────
+// Canvas Dimensions
+// ──────────────────────────────────────────────
+const CANVAS_PRESETS = { '1:1':[1,1], '4:5':[4,5], '9:16':[9,16], '16:9':[16,9] };
+
+function getCanvasRatio() {
+  if (canvasPreset === 'free') return null;
+  if (canvasPreset === 'custom') return [canvasCustomW, canvasCustomH];
+  return CANVAS_PRESETS[canvasPreset] ?? null;
+}
+
+function setCanvasPreset(val) {
+  canvasPreset = val;
+  document.getElementById('canvasCustomCtrl').style.display = val === 'custom' ? 'flex' : 'none';
+  render();
+  syncExportPreset();
+}
+
+function setCanvasCustomDim() {
+  canvasCustomW = parseInt(document.getElementById('canvasCustomW').value) || 1080;
+  canvasCustomH = parseInt(document.getElementById('canvasCustomH').value) || 1080;
+  render();
+  syncExportPreset();
+}
+
+function syncExportPreset() {
+  // Keep export modal in sync with canvas picker
+  const ratio = getCanvasRatio();
+  if (!ratio) return;
+  const [rw, rh] = ratio;
+  // Find matching preset button in export modal
+  const match = [...document.querySelectorAll('.size-preset-btn')].find(b => {
+    return parseInt(b.dataset.w) === rw * 270 && parseInt(b.dataset.h) === rh * 270
+      || (b.dataset.w && parseInt(b.dataset.w)/parseInt(b.dataset.h) === rw/rh);
+  });
+}
+
+// ──────────────────────────────────────────────
 // Grid Controls
 // ──────────────────────────────────────────────
 function updateCellSize(val) {
   cellSize = parseInt(val);
   document.getElementById('cellSizeVal').textContent = val + 'px';
   const g = document.getElementById('bentoGrid');
-  g.style.gridTemplateColumns = `repeat(${gridCols}, ${val}px)`;
-  g.style.gridTemplateRows    = `repeat(${gridRows}, ${val}px)`;
+  const ratio = getCanvasRatio();
+  if (ratio) {
+    const [rw, rh] = ratio;
+    const totalW = gridCols * cellSize + (gridCols - 1) * gap;
+    g.style.width  = totalW + 'px';
+    g.style.height = Math.round(totalW * rh / rw) + 'px';
+    g.style.gridTemplateColumns = `repeat(${gridCols}, 1fr)`;
+    g.style.gridTemplateRows    = `repeat(${gridRows}, 1fr)`;
+  } else {
+    g.style.width  = '';
+    g.style.height = '';
+    g.style.gridTemplateColumns = `repeat(${gridCols}, ${val}px)`;
+    g.style.gridTemplateRows    = `repeat(${gridRows}, ${val}px)`;
+  }
 }
 
 function updateGap(val) {
@@ -1472,7 +1556,24 @@ function assignPhoto(cellId, photoId) {
 // ──────────────────────────────────────────────
 // Export
 // ──────────────────────────────────────────────
-function showExportModal() { document.getElementById('exportModal').style.display = 'flex'; }
+function showExportModal() {
+  // Sync export canvas preset to match the active canvas dimensions
+  const ratio = getCanvasRatio();
+  if (ratio && canvasPreset !== 'custom') {
+    const label = { '1:1':'1:1 — 1080', '4:5':'4:5 — Portrait', '9:16':'9:16 — Story', '16:9':'16:9 — Wide' }[canvasPreset];
+    document.querySelectorAll('.size-preset-btn').forEach(b => {
+      b.classList.toggle('active', b.textContent.trim() === label);
+    });
+    document.getElementById('sizeCustomInputs').style.display = 'none';
+  } else if (canvasPreset === 'custom') {
+    document.querySelectorAll('.size-preset-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector('.size-preset-btn[data-w="custom"]').classList.add('active');
+    document.getElementById('exportCanvasW').value = canvasCustomW;
+    document.getElementById('exportCanvasH').value = canvasCustomH;
+    document.getElementById('sizeCustomInputs').style.display = 'flex';
+  }
+  document.getElementById('exportModal').style.display = 'flex';
+}
 function hideExportModal() { document.getElementById('exportModal').style.display = 'none'; }
 function showHelpModal()   { document.getElementById('helpModal').style.display = 'flex'; }
 function hideHelpModal()   { document.getElementById('helpModal').style.display = 'none'; }
@@ -1578,6 +1679,7 @@ function saveProject() {
   const data = {
     version: 1,
     gridCols, gridRows, gap, gridRadius, cellSize,
+    canvasPreset, canvasCustomW, canvasCustomH,
     cells, photos
   };
   const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
@@ -1609,6 +1711,9 @@ function handleLoadFile(e) {
       gap       = data.gap       ?? 8;
       gridRadius = data.gridRadius ?? 12;
       cellSize  = data.cellSize  ?? 140;
+      canvasPreset  = data.canvasPreset  ?? 'free';
+      canvasCustomW = data.canvasCustomW ?? 1080;
+      canvasCustomH = data.canvasCustomH ?? 1080;
       cellCounter  = cells.length  ? Math.max(...cells.map(c => c.id))  : 0;
       photoCounter = photos.length ? Math.max(...photos.map(p => p.id)) : 0;
       // Rebuild photo thumbnails
@@ -1621,6 +1726,12 @@ function handleLoadFile(e) {
       document.getElementById('gapVal').textContent = gap + 'px';
       document.getElementById('gridRadiusSlider').value = gridRadius;
       document.getElementById('gridRadiusVal').textContent = gridRadius + 'px';
+      document.getElementById('canvasPresetPicker').value = canvasPreset;
+      document.getElementById('canvasCustomCtrl').style.display = canvasPreset === 'custom' ? 'flex' : 'none';
+      if (canvasPreset === 'custom') {
+        document.getElementById('canvasCustomW').value = canvasCustomW;
+        document.getElementById('canvasCustomH').value = canvasCustomH;
+      }
       selectedId = null;
       render(); syncProps();
       showToast('Project loaded');
