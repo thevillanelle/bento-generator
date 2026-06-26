@@ -1,0 +1,27 @@
+name: Validate HTML
+
+on:
+  pull_request:
+    paths: ['**.html']
+  push:
+    branches: [main]
+    paths: ['**.html']
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tidy
+        run: sudo apt-get install -y tidy
+
+      - name: Check HTML
+        run: |
+          tidy -errors -quiet index.html
+          code=$?
+          if [ $code -gt 1 ]; then
+            echo "❌ HTML errors found — fix before merging"
+            exit 1
+          fi
+          echo "✅ HTML valid"
