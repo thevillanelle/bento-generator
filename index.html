@@ -391,9 +391,23 @@ select {
   flex-shrink: 0;
   background: var(--bg-panel);
   border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: background 0.2s, border-color 0.2s;
+}
+.props-scroll {
+  flex: 1;
   overflow-y: auto;
   padding: 16px;
-  transition: background 0.2s, border-color 0.2s;
+}
+.props-theme-footer {
+  flex-shrink: 0;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .props-empty { color: var(--text-5); font-size: 12px; text-align: center; padding: 24px 0; }
 .prop-section { margin-bottom: 18px; }
@@ -584,14 +598,7 @@ select {
 <div class="topbar">
   <div class="bb-logo">
     <span class="bb-logo-mark">BB</span>
-    <span class="bb-logo-sub">Bento Box</span>
   </div>
-  <div class="topbar-sep"></div>
-
-  <div class="theme-switcher">
-    <button class="theme-btn active" id="btn-dark"  onclick="setTheme('dark')">🌙 Dark</button>
-    <button class="theme-btn"        id="btn-light" onclick="setTheme('light')">☀️ Light</button>
-    <button class="theme-btn"        id="btn-bb"    onclick="setTheme('bb')">🫧 BB</button>
   </div>
   <div class="topbar-sep"></div>
 
@@ -679,8 +686,9 @@ select {
 
   <!-- Properties -->
   <div class="properties">
-    <div class="props-empty" id="propsEmpty">Click a cell to edit it</div>
-    <div id="propsContent" style="display:none">
+    <div class="props-scroll">
+      <div class="props-empty" id="propsEmpty">Click a cell to edit it</div>
+      <div id="propsContent" style="display:none">
 
       <div class="prop-section">
         <div class="prop-section-title">Cell Size</div>
@@ -762,6 +770,14 @@ select {
         <button class="remove-section-btn" onclick="removeCell()">Delete Section</button>
       </div>
 
+    </div><!-- /propsContent -->
+    </div><!-- /props-scroll -->
+    <div class="props-theme-footer">
+      <div class="theme-switcher">
+        <button class="theme-btn active" id="btn-dark"  onclick="setTheme('dark')">🌙 Dark</button>
+        <button class="theme-btn"        id="btn-light" onclick="setTheme('light')">☀️ Light</button>
+        <button class="theme-btn"        id="btn-bb"    onclick="setTheme('bb')">🫧 BB</button>
+      </div>
     </div>
   </div>
 </div>
