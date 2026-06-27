@@ -623,6 +623,8 @@ select {
       <option value="custom">Custom</option>
     </select>
   </div>
+  <button class="btn" onclick="resetLayout()" title="Reset layout and settings (keeps photos)">↺ Layout</button>
+  <button class="btn" onclick="clearPhotos()" title="Clear photo library">⊗ Photos</button>
 
   <div class="ctrl" id="customCtrls" style="display:none">
     <label>Cols</label>
@@ -1011,6 +1013,36 @@ function setTheme(name) {
 }
 
 function init() { applyLayout('classic'); }
+
+function resetLayout() {
+  if (!confirm('Reset the layout? Your photos will stay in the library.')) return;
+  cells = []; cellCounter = 0; selectedId = null; history = [];
+  gap = 8; gridRadius = 12; cellSize = 140;
+  canvasPreset = 'free'; canvasCustomW = 1080; canvasCustomH = 1080; canvasUnit = 'px';
+  document.getElementById('gapSlider').value = 8;
+  document.getElementById('gapVal').textContent = '8px';
+  document.getElementById('gridRadiusSlider').value = 12;
+  document.getElementById('gridRadiusVal').textContent = '12px';
+  document.getElementById('cellSizeSlider').value = 140;
+  document.getElementById('cellSizeVal').textContent = '140px';
+  document.getElementById('gridBgColor').value = '#1a1a1a';
+  document.getElementById('bentoGrid').style.background = '#1a1a1a';
+  document.getElementById('layoutPicker').value = 'classic';
+  document.getElementById('canvasPresetPicker').value = 'free';
+  document.getElementById('canvasCustomCtrl').style.display = 'none';
+  document.getElementById('canvasUnitPicker').value = 'px';
+  applyLayout('classic');
+  showToast('Layout reset');
+}
+
+function clearPhotos() {
+  if (!confirm('Clear all photos from the library?')) return;
+  photos = []; photoCounter = 0;
+  cells.forEach(c => { c.photoId = null; c.zoom = 1; c.panX = 0; c.panY = 0; });
+  document.getElementById('photoGrid').innerHTML = '';
+  render(); syncProps();
+  showToast('Photos cleared');
+}
 
 function applyLayout(name) {
   document.getElementById('customCtrls').style.display = name === 'custom' ? 'flex' : 'none';
@@ -1686,7 +1718,11 @@ async function exportImage() {
 let history = [];
 
 function pushHistory() {
-  history.push(JSON.stringify({ cells, gridCols, gridRows }));
+  history.push(JSON.stringify({
+    cells, gridCols, gridRows,
+    gap, gridRadius, cellSize,
+    canvasPreset, canvasCustomW, canvasCustomH, canvasUnit
+  }));
   if (history.length > 40) history.shift();
 }
 
@@ -1696,6 +1732,25 @@ function undo() {
   cells = snap.cells;
   gridCols = snap.gridCols;
   gridRows = snap.gridRows;
+  gap = snap.gap;
+  gridRadius = snap.gridRadius;
+  cellSize = snap.cellSize;
+  canvasPreset = snap.canvasPreset;
+  canvasCustomW = snap.canvasCustomW;
+  canvasCustomH = snap.canvasCustomH;
+  canvasUnit = snap.canvasUnit;
+  // Sync all UI controls
+  document.getElementById('gapSlider').value = gap;
+  document.getElementById('gapVal').textContent = gap + 'px';
+  document.getElementById('gridRadiusSlider').value = gridRadius;
+  document.getElementById('gridRadiusVal').textContent = gridRadius + 'px';
+  document.getElementById('cellSizeSlider').value = cellSize;
+  document.getElementById('cellSizeVal').textContent = cellSize + 'px';
+  document.getElementById('canvasPresetPicker').value = canvasPreset;
+  document.getElementById('canvasCustomCtrl').style.display = canvasPreset === 'custom' ? '' : 'none';
+  document.getElementById('canvasCustomW').value = canvasCustomW;
+  document.getElementById('canvasCustomH').value = canvasCustomH;
+  document.getElementById('canvasUnitPicker').value = canvasUnit;
   render(); syncProps();
   showToast('Undone');
 }
