@@ -113,7 +113,7 @@ body {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  filter: drop-shadow(0 2px 6px color-mix(in srgb, var(--logo-b) 40%, transparent));
+  filter: drop-shadow(0 2px 6px var(--accent-glow));
   letter-spacing: -2px;
   line-height: 1;
 }
@@ -241,6 +241,10 @@ select {
   background: var(--accent-bg);
   color: var(--text-3);
 }
+.upload-zone:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 .upload-zone input { display: none; }
 .upload-icon { opacity: 0.4; margin-bottom: 6px; }
 .library-actions {
@@ -338,7 +342,7 @@ select {
 .bento-cell:hover::after { outline-color: var(--accent-glow); }
 .bento-cell.selected::after { outline-color: var(--accent); }
 .bento-cell.drop-target::after { outline-color: #10b981; }
-.bento-cell.drop-target { background: rgba(16,185,129,0.08) !important; }
+.bento-cell.drop-target::before { content:''; position:absolute; inset:0; background:rgba(16,185,129,0.08); pointer-events:none; z-index:0; }
 .cell-bg {
   position: absolute; inset: 0;
   background-size: cover;
@@ -524,7 +528,7 @@ select {
 .size-preset-btn {
   padding: 5px 11px; border-radius: 5px; border: 1.5px solid var(--border-mid);
   background: var(--bg-input); color: var(--text-3); cursor: pointer;
-  font-size: 11px; font-weight: 500; transition: all 0.12s; white-space: nowrap;
+  font-size: 11px; font-weight: 500; transition: border-color 0.12s, background 0.12s, color 0.12s; white-space: nowrap;
 }
 .size-preset-btn:hover { border-color: var(--accent); color: var(--text); }
 .size-preset-btn.active { border-color: var(--accent); background: var(--accent-bg); color: var(--accent); }
@@ -598,6 +602,7 @@ select {
   background: rgba(0,0,0,0.72);
   display: flex; align-items: center; justify-content: center;
   z-index: 200;
+  -webkit-backdrop-filter: blur(4px);
   backdrop-filter: blur(4px);
 }
 .modal {
@@ -719,6 +724,7 @@ select {
       <div>Drop or click<br>to add photos</div>
     </div>
     <div class="library-actions">
+      <button class="btn library-action-btn" onclick="saveProject()" title="Save project as .bb file">Save ↓</button>
       <button class="btn library-action-btn" onclick="loadProject()" title="Load a saved .bb project file">Load ↑</button>
       <button class="btn library-action-btn" onclick="clearPhotos()" title="Clear all photos from the library">⊗ Clear</button>
     </div>
@@ -726,7 +732,7 @@ select {
   </div>
 
   <!-- Editor -->
-  <div class="editor" id="editorArea" ondragover="e=>e.preventDefault()" ondrop="e=>e.preventDefault()">
+  <div class="editor" id="editorArea" ondragover="event.preventDefault()" ondrop="event.preventDefault()">
     <button class="btn editor-reset-btn" onclick="resetLayout()" title="Reset layout and settings (keeps photos)">↺ Reset Layout</button>
     <div class="bento-grid" id="bentoGrid"></div>
   </div>
@@ -802,16 +808,16 @@ select {
         <div class="prop-section-title">Photo</div>
         <div class="prop-row">
           <label>Zoom</label>
-          <input type="range" id="photoZoom" min="100" max="300" value="100" oninput="applyPhotoZoom(this.value)">
+          <input type="range" id="photoZoom" min="100" max="300" value="100" oninput="applyPhotoZoom(this.value)" onchange="pushHistory()">
           <span id="photoZoomVal">100%</span>
         </div>
         <div class="prop-row">
           <label>Pan X</label>
-          <input type="range" id="panX" min="-100" max="100" value="0" oninput="applyPan()">
+          <input type="range" id="panX" min="-100" max="100" value="0" oninput="applyPan()" onchange="pushHistory()">
         </div>
         <div class="prop-row">
           <label>Pan Y</label>
-          <input type="range" id="panY" min="-100" max="100" value="0" oninput="applyPan()">
+          <input type="range" id="panY" min="-100" max="100" value="0" oninput="applyPan()" onchange="pushHistory()">
         </div>
         <button class="remove-cell-photo" onclick="clearCellPhoto()">Remove Photo</button>
       </div>
@@ -1029,11 +1035,16 @@ const LAYOUTS = {
 // Init
 // ──────────────────────────────────────────────
 function setTheme(name) {
-  document.documentElement.dataset.theme = name === 'dark' ? '' : name;
+  if (name === 'dark') {
+    document.documentElement.removeAttribute('data-theme');
+  } else {
+    document.documentElement.dataset.theme = name;
+  }
+  localStorage.setItem('bb-theme', name);
   ['dark','light','bb'].forEach(t => document.getElementById('btn-'+t).classList.toggle('active', t === name));
 }
 
-function init() { applyLayout('classic'); }
+function init() { setTheme(localStorage.getItem('bb-theme') || 'dark'); applyLayout('classic'); }
 
 function resetLayout() {
   if (!confirm('Reset the layout? Your photos will stay in the library.')) return;
@@ -1057,15 +1068,17 @@ function resetLayout() {
 }
 
 function clearPhotos() {
+  panState = null;
   if (!confirm('Clear all photos from the library?')) return;
   photos = []; photoCounter = 0;
-  cells.forEach(c => { c.photoId = null; c.zoom = 1; c.panX = 0; c.panY = 0; });
+  cells.forEach(c => { c.photoId = null; c.zoom = 100; c.panX = 0; c.panY = 0; });
   document.getElementById('photoGrid').innerHTML = '';
   render(); syncProps();
   showToast('Photos cleared');
 }
 
 function applyLayout(name) {
+  pushHistory();
   document.getElementById('customCtrls').style.display = name === 'custom' ? 'flex' : 'none';
   if (name === 'custom') { rebuildCustomGrid(); return; }
 
@@ -1093,9 +1106,17 @@ function applyLayout(name) {
   render(); syncProps();
 }
 
+let _lastCustomCols = null, _lastCustomRows = null;
 function rebuildCustomGrid() {
-  gridCols = parseInt(document.getElementById('colsInput').value) || 4;
-  gridRows = parseInt(document.getElementById('rowsInput').value) || 3;
+  const newCols = Math.min(Math.max(parseInt(document.getElementById('colsInput').value) || 4, 2), 8);
+  const newRows = Math.min(Math.max(parseInt(document.getElementById('rowsInput').value) || 3, 2), 8);
+  if (newCols !== _lastCustomCols || newRows !== _lastCustomRows) {
+    pushHistory();
+    _lastCustomCols = newCols;
+    _lastCustomRows = newRows;
+  }
+  gridCols = Math.min(Math.max(parseInt(document.getElementById('colsInput').value) || 4, 2), 8);
+  gridRows = Math.min(Math.max(parseInt(document.getElementById('rowsInput').value) || 3, 2), 8);
   cells = [];
   for (let r = 1; r <= gridRows; r++)
     for (let c = 1; c <= gridCols; c++)
@@ -1182,6 +1203,14 @@ function render() {
     });
     el.appendChild(del);
 
+    // Keyboard accessibility
+    el.tabIndex = 0;
+    el.setAttribute('role', 'button');
+    el.setAttribute('aria-label', 'Cell');
+    el.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); selectCell(cell.id); }
+    });
+
     // Click → select
     el.addEventListener('click', e => { e.stopPropagation(); selectCell(cell.id); });
 
@@ -1203,13 +1232,18 @@ function render() {
     if (cell.photoId) {
       el.addEventListener('mousedown', e => {
         if (e.target.closest('.resize-handle')) return;
+        pushHistory();
         panState = { cell, el, sx: e.clientX, sy: e.clientY, spx: cell.panX, spy: cell.panY };
         e.preventDefault();
       });
 
       // Scroll zoom
+      let wheelHistoryTimer = null;
       el.addEventListener('wheel', e => {
         e.preventDefault();
+        if (!wheelHistoryTimer) pushHistory();
+        clearTimeout(wheelHistoryTimer);
+        wheelHistoryTimer = setTimeout(() => { wheelHistoryTimer = null; }, 500);
         cell.zoom = clamp(cell.zoom - e.deltaY * 0.25, 100, 300);
         const bg = el.querySelector('.cell-bg');
         if (bg) bg.style.transform = imgTransform(cell);
@@ -1239,12 +1273,19 @@ function render() {
       add.style.gridColumn = col;
       add.style.gridRow    = row;
       add.innerHTML = '<div class="add-tile-inner"><span class="add-tile-plus">+</span></div>';
-      add.addEventListener('click', e => {
+      add.tabIndex = 0;
+      add.setAttribute('role', 'button');
+      add.setAttribute('aria-label', 'Add tile');
+      const addTileAction = e => {
         e.stopPropagation();
         pushHistory();
         cells.push({ id: ++cellCounter, col, row, colSpan: 1, rowSpan: 1,
                      photoId: null, zoom: 100, panX: 0, panY: 0, bg: '#2a2a2a', radius: 12, shape: 'rounded' });
         render(); syncProps();
+      };
+      add.addEventListener('click', addTileAction);
+      add.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); addTileAction(e); }
       });
       grid.appendChild(add);
     }
@@ -1316,7 +1357,14 @@ document.getElementById('editorArea').addEventListener('click', e => {
 // ──────────────────────────────────────────────
 // Selection & Properties
 // ──────────────────────────────────────────────
-function selectCell(id) { selectedId = id; render(); syncProps(); }
+function selectCell(id) {
+  const prev = document.querySelector('[data-id="' + selectedId + '"]');
+  if (prev) prev.classList.remove('selected');
+  selectedId = id;
+  const next = document.querySelector('[data-id="' + id + '"]');
+  if (next) next.classList.add('selected');
+  syncProps();
+}
 
 function syncProps() {
   const empty   = document.getElementById('propsEmpty');
@@ -1428,12 +1476,14 @@ function setCanvasPreset(val) {
   render();
 }
 
+let _canvasCustomDimTimer = null;
 function setCanvasCustomDim() {
   const rawW = parseFloat(document.getElementById('canvasCustomW').value) || 1080;
   const rawH = parseFloat(document.getElementById('canvasCustomH').value) || 1080;
   canvasCustomW = Math.round(toPx(rawW));
   canvasCustomH = Math.round(toPx(rawH));
-  render();
+  clearTimeout(_canvasCustomDimTimer);
+  _canvasCustomDimTimer = setTimeout(() => { render(); }, 150);
 }
 
 function setCanvasUnit(val) {
@@ -1499,7 +1549,13 @@ function updateGridBg(val) {
   document.getElementById('bentoGrid').style.background = val;
 }
 
+let _gridRadiusDragging = false;
 function updateGridRadius(val) {
+  if (!_gridRadiusDragging) {
+    pushHistory();
+    _gridRadiusDragging = true;
+    window.addEventListener('mouseup', () => { _gridRadiusDragging = false; }, { once: true });
+  }
   gridRadius = parseInt(val);
   document.getElementById('gridRadiusVal').textContent = val + 'px';
   document.getElementById('bentoGrid').style.borderRadius = val + 'px';
@@ -1507,7 +1563,7 @@ function updateGridRadius(val) {
   cells.forEach(cell => {
     if (cell.shape === 'rounded' || cell.shape === 'rect') cell.radius = gridRadius;
   });
-  render();
+  cells.forEach(cell => { const el = document.querySelector('[data-id="'+cell.id+'"]'); if (el) applyShapeToEl(el, cell); });
   if (selectedId) syncProps();
 }
 
@@ -1529,6 +1585,7 @@ function applyShapeToEl(el, cell) {
 function applyShape(shape) {
   const cell = cells.find(c => c.id === selectedId);
   if (!cell) return;
+  pushHistory();
   cell.shape = shape;
   const el = document.querySelector(`[data-id="${selectedId}"]`);
   if (el) applyShapeToEl(el, cell);
@@ -1568,16 +1625,25 @@ function isHeic(file) {
 
 function loadPhoto(file) {
   if (isHeic(file)) {
+    if (typeof heic2any !== 'function') {
+      showToast('HEIC conversion unavailable — library failed to load', true, 4000);
+      return;
+    }
     const convertingToast = showToast('Converting ' + file.name + '…', false, 30000);
-    heic2any({ blob: file, toType: 'image/jpeg', quality: 0.92 })
-      .then(blob => {
-        convertingToast && convertingToast.remove();
-        loadPhoto(new File([blob], file.name.replace(/\.heic$/i, '.jpg'), { type: 'image/jpeg' }));
-      })
-      .catch(() => {
-        convertingToast && convertingToast.remove();
-        showToast('Could not convert HEIC: ' + file.name, true, 4000);
-      });
+    try {
+      heic2any({ blob: file, toType: 'image/jpeg', quality: 0.92 })
+        .then(blob => {
+          convertingToast && convertingToast.remove();
+          loadPhoto(new File([blob], file.name.replace(/\.heic$/i, '.jpg'), { type: 'image/jpeg' }));
+        })
+        .catch(() => {
+          convertingToast && convertingToast.remove();
+          showToast('Could not convert HEIC: ' + file.name, true, 4000);
+        });
+    } catch (err) {
+      convertingToast && convertingToast.remove();
+      showToast('Could not convert HEIC: ' + file.name, true, 4000);
+    }
     return;
   }
   const reader = new FileReader();
@@ -1612,6 +1678,12 @@ function addThumb(photo) {
 
   t.appendChild(img);
   t.appendChild(removeBtn);
+  t.tabIndex = 0;
+  t.setAttribute('role', 'button');
+  t.setAttribute('aria-label', 'Assign photo');
+  t.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (selectedId) assignPhoto(selectedId, photo.id); }
+  });
   t.addEventListener('dragstart', e => {
     dragPhotoId = photo.id;
     e.dataTransfer.setData('text/plain', String(photo.id));
@@ -1627,6 +1699,7 @@ function addThumb(photo) {
 }
 
 function deletePhoto(id) {
+  if (panState && panState.cell.photoId === id) panState = null;
   photos = photos.filter(p => p.id !== id);
   cells.forEach(c => { if (c.photoId === id) c.photoId = null; });
   document.querySelector(`[data-pid="${id}"]`)?.remove();
@@ -1667,6 +1740,7 @@ function hideHelpModal()   { _closeModal('helpModal'); }
 let _modalReturnFocus = null;
 
 function _openModal(id) {
+  ['exportModal','helpModal'].filter(mid => mid !== id).forEach(mid => { const m = document.getElementById(mid); if (m.style.display !== 'none') _closeModal(mid); });
   _modalReturnFocus = document.activeElement;
   const modal = document.getElementById(id);
   modal.style.display = 'flex';
@@ -1730,6 +1804,9 @@ async function exportImage() {
   await new Promise(r => setTimeout(r, 60));
 
   try {
+    if (cells.some(c => c.shape === 'diamond' || c.shape === 'hex')) {
+      showToast('Diamond/hex shapes may not export correctly with this renderer', false, 4000);
+    }
     const canvas = await html2canvas(grid, {
       scale, useCORS: true, allowTaint: true,
       backgroundColor: null, logging: false
@@ -1745,17 +1822,23 @@ async function exportImage() {
 
     const mime = { png: 'image/png', jpeg: 'image/jpeg', webp: 'image/webp' }[fmt];
     const url  = finalCanvas.toDataURL(mime, quality);
+    const ext  = url.startsWith('data:image/webp') ? fmt : 'png';
     const a    = document.createElement('a');
-    a.href = url; a.download = `bento.${fmt}`; a.click();
+    a.href = url; a.download = `bento.${ext}`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
     hideExportModal();
-    showToast('Image exported');
+    if (fmt === 'webp' && !url.startsWith('data:image/webp')) {
+      showToast('WebP not supported in this browser — saved as PNG', false, 3500);
+    } else {
+      showToast('Image exported');
+    }
   } catch (err) {
     showToast('Export failed — try a lower scale or simpler shapes', true, 5000);
   } finally {
     grid.classList.remove('exporting');
-    selectedId = prev; render();
     exportBtn.disabled = false;
     exportBtn.textContent = 'Export ↓';
+    selectedId = prev; try { render(); } catch(_) {}
   }
 }
 
@@ -1775,7 +1858,9 @@ function snapshot() {
 }
 
 function applySnap(snap) {
+  if (selectedId && !snap.cells.find(c => c.id === selectedId)) selectedId = null;
   cells = snap.cells;
+  cellCounter = cells.length ? Math.max(...cells.map(c => c.id)) : 0;
   gridCols = snap.gridCols;
   gridRows = snap.gridRows;
   gap = snap.gap;
@@ -1815,6 +1900,7 @@ function pushHistory() {
 function undo() {
   if (!undoHistory.length) { showToast('Nothing to undo'); return; }
   redoStack.push(snapshot());
+  if (redoStack.length > 40) redoStack.shift();
   applySnap(JSON.parse(undoHistory.pop()));
   const left = undoHistory.length;
   showToast(left ? `Undone  (${left} step${left === 1 ? '' : 's'} left)` : 'Undone');
@@ -1851,14 +1937,17 @@ function saveProject() {
     version: 1,
     gridCols, gridRows, gap, gridRadius, cellSize,
     canvasPreset, canvasCustomW, canvasCustomH, canvasUnit,
-    cells, photos
+    cells, photos,
+    gridBg: document.getElementById('gridBgColor').value
   };
   const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = 'bento-project.bb';
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(a.href);
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(a.href), 100);
   showToast('Project saved as .bb file');
 }
 
@@ -1874,7 +1963,7 @@ function handleLoadFile(e) {
     try {
       const data = JSON.parse(ev.target.result);
       if (!data.version || !Array.isArray(data.cells)) throw new Error();
-      const VALID_SHAPES = ['rounded','square','circle','squircle','diamond','hex'];
+      const VALID_SHAPES = ['rounded','rect','circle','squircle','diamond','hex'];
       const VALID_UNITS  = ['px','in','cm'];
       const VALID_PRESETS = ['free','1:1','4:5','9:16','16:9','custom'];
       // Sanitize cells
@@ -1897,17 +1986,23 @@ function handleLoadFile(e) {
       data.photos = rawPhotos.filter(p =>
         typeof p.src === 'string' && p.src.startsWith('data:image/')
       ).map(p => ({ id: parseInt(p.id) || 0, src: p.src, name: String(p.name || '') }));
+      // Deduplicate by ID and reject id <= 0 to prevent ghost records
+      data.cells  = data.cells.filter((c, i, a) => c.id > 0 && a.findIndex(x => x.id === c.id) === i);
+      data.photos = data.photos.filter((p, i, a) => p.id > 0 && a.findIndex(x => x.id === p.id) === i);
+      // Cross-check cell photoIds against surviving photos
+      const validPhotoIds = new Set(data.photos.map(p => p.id));
+      data.cells.forEach(c => { if (c.photoId !== null && !validPhotoIds.has(c.photoId)) c.photoId = null; });
       // Sanitize scalar fields
       if (!VALID_PRESETS.includes(data.canvasPreset)) data.canvasPreset = 'free';
       if (!VALID_UNITS.includes(data.canvasUnit))     data.canvasUnit   = 'px';
       pushHistory();
       cells     = data.cells;
       photos    = data.photos || [];
-      gridCols  = data.gridCols  || 4;
-      gridRows  = data.gridRows  || 3;
-      gap       = data.gap       ?? 8;
-      gridRadius = data.gridRadius ?? 12;
-      cellSize  = data.cellSize  ?? 140;
+      gridCols   = Math.min(Math.max(parseInt(data.gridCols) || 4, 1), 8);
+      gridRows   = Math.min(Math.max(parseInt(data.gridRows) || 3, 1), 8);
+      cellSize   = Math.min(Math.max(data.cellSize ?? 140, 80), 220);
+      gap        = Math.min(Math.max(data.gap ?? 8, 0), 24);
+      gridRadius = Math.min(Math.max(data.gridRadius ?? 12, 0), 40);
       canvasPreset  = data.canvasPreset  ?? 'free';
       canvasCustomW = data.canvasCustomW ?? 1080;
       canvasCustomH = data.canvasCustomH ?? 1080;
@@ -1938,6 +2033,7 @@ function handleLoadFile(e) {
       showToast('Could not read project file', true, 3500);
     }
   };
+  reader.onerror = () => showToast('Could not read project file', true, 3500);
   reader.readAsText(file);
   e.target.value = '';
 }
@@ -1954,9 +2050,10 @@ document.addEventListener('keydown', e => {
     hideHelpModal();
   }
   if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) {
-    if (['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) return;
+    if (['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName) || document.activeElement.isContentEditable) return;
     removeCell();
   }
+  if (['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName) || document.activeElement.isContentEditable) return;
   if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
     e.preventDefault();
     undo();
@@ -1970,7 +2067,9 @@ document.addEventListener('keydown', e => {
 // Single global pan handlers — registered once, not per-cell per-render
 window.addEventListener('mousemove', e => {
   if (!panState) return;
-  const { cell, el, sx, sy, spx, spy } = panState;
+  const { cell, sx, sy, spx, spy } = panState;
+  const el = document.querySelector('[data-id="' + cell.id + '"]');
+  if (!el) { panState = null; return; }
   const scale = cellSize / 100;
   cell.panX = spx + (e.clientX - sx) / scale;
   cell.panY = spy + (e.clientY - sy) / scale;
