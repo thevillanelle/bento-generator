@@ -299,6 +299,13 @@ select {
   padding: 28px;
   background: var(--bg-editor);
   transition: background 0.2s;
+  position: relative;
+}
+.editor-reset-btn {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  z-index: 10;
 }
 .bento-grid {
   display: grid;
@@ -623,8 +630,6 @@ select {
       <option value="custom">Custom</option>
     </select>
   </div>
-  <button class="btn" onclick="resetLayout()" title="Reset layout and settings (keeps photos)">↺ Layout</button>
-  <button class="btn" onclick="clearPhotos()" title="Clear photo library">⊗ Photos</button>
 
   <div class="ctrl" id="customCtrls" style="display:none">
     <label>Cols</label>
@@ -707,12 +712,14 @@ select {
     </div>
     <div class="library-actions">
       <button class="btn library-action-btn" onclick="loadProject()" title="Load a saved .bb project file">Load ↑</button>
+      <button class="btn library-action-btn" onclick="clearPhotos()" title="Clear all photos from the library">⊗ Clear</button>
     </div>
     <div class="photo-grid" id="photoGrid"></div>
   </div>
 
   <!-- Editor -->
   <div class="editor" id="editorArea" ondragover="e=>e.preventDefault()" ondrop="e=>e.preventDefault()">
+    <button class="btn editor-reset-btn" onclick="resetLayout()" title="Reset layout and settings (keeps photos)">↺ Reset Layout</button>
     <div class="bento-grid" id="bentoGrid"></div>
   </div>
 
