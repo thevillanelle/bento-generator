@@ -1242,7 +1242,7 @@ function render() {
         e.stopPropagation();
         pushHistory();
         cells.push({ id: ++cellCounter, col, row, colSpan: 1, rowSpan: 1,
-                     photoId: null, zoom: 100, panX: 0, panY: 0, bg: '', radius: 12, shape: 'rounded' });
+                     photoId: null, zoom: 100, panX: 0, panY: 0, bg: '#2a2a2a', radius: 12, shape: 'rounded' });
         render(); syncProps();
       });
       grid.appendChild(add);
@@ -1426,7 +1426,6 @@ function setCanvasPreset(val) {
   canvasPreset = val;
   document.getElementById('canvasCustomCtrl').style.display = val === 'custom' ? 'flex' : 'none';
   render();
-  syncExportPreset();
 }
 
 function setCanvasCustomDim() {
@@ -1435,7 +1434,6 @@ function setCanvasCustomDim() {
   canvasCustomW = Math.round(toPx(rawW));
   canvasCustomH = Math.round(toPx(rawH));
   render();
-  syncExportPreset();
 }
 
 function setCanvasUnit(val) {
@@ -1467,18 +1465,6 @@ function fromPx(px) {
   return px;
 }
 function round2(n) { return Math.round(n * 100) / 100; }
-
-function syncExportPreset() {
-  // Keep export modal in sync with canvas picker
-  const ratio = getCanvasRatio();
-  if (!ratio) return;
-  const [rw, rh] = ratio;
-  // Find matching preset button in export modal
-  const match = [...document.querySelectorAll('.size-preset-btn')].find(b => {
-    return parseInt(b.dataset.w) === rw * 270 && parseInt(b.dataset.h) === rh * 270
-      || (b.dataset.w && parseInt(b.dataset.w)/parseInt(b.dataset.h) === rw/rh);
-  });
-}
 
 // ──────────────────────────────────────────────
 // Grid Controls
@@ -1582,9 +1568,16 @@ function isHeic(file) {
 
 function loadPhoto(file) {
   if (isHeic(file)) {
+    const convertingToast = showToast('Converting ' + file.name + '…', false, 30000);
     heic2any({ blob: file, toType: 'image/jpeg', quality: 0.92 })
-      .then(blob => loadPhoto(new File([blob], file.name.replace(/\.heic$/i, '.jpg'), { type: 'image/jpeg' })))
-      .catch(() => showToast('Could not convert HEIC: ' + file.name, true, 4000));
+      .then(blob => {
+        convertingToast && convertingToast.remove();
+        loadPhoto(new File([blob], file.name.replace(/\.heic$/i, '.jpg'), { type: 'image/jpeg' }));
+      })
+      .catch(() => {
+        convertingToast && convertingToast.remove();
+        showToast('Could not convert HEIC: ' + file.name, true, 4000);
+      });
     return;
   }
   const reader = new FileReader();
@@ -1802,6 +1795,7 @@ function showToast(msg, isError = false, duration = 2600) {
     t.classList.remove('toast-show');
     setTimeout(() => t.remove(), 300);
   }, duration);
+  return t;
 }
 
 // ──────────────────────────────────────────────
@@ -1884,6 +1878,10 @@ function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
 // Delete selected cell with keyboard
 document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    hideExportModal();
+    hideHelpModal();
+  }
   if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) {
     if (['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) return;
     removeCell();
