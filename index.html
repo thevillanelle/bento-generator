@@ -36,8 +36,11 @@
   --accent-bg:     rgba(99,102,241,0.08);
   --logo-a:        #a78bfa;
   --logo-b:        #6366f1;
+  --danger:        #e05555;
+  --danger-bg:     rgba(180,30,30,0.18);
+  --danger-bg-h:   rgba(180,30,30,0.30);
+  --danger-border: rgba(180,30,30,0.35);
 }
-[data-theme="light"] {
   --bg:            #f0f0f0;
   --bg-bar:        #ffffff;
   --bg-panel:      #f8f8f8;
@@ -62,6 +65,10 @@
   --accent-bg:     rgba(99,102,241,0.08);
   --logo-a:        #818cf8;
   --logo-b:        #6366f1;
+  --danger:        #cc2222;
+  --danger-bg:     rgba(180,30,30,0.08);
+  --danger-bg-h:   rgba(180,30,30,0.15);
+  --danger-border: rgba(180,30,30,0.25);
 }
 [data-theme="bb"] {
   --bg:            #f4eeff;
@@ -88,6 +95,10 @@
   --accent-bg:     rgba(255,107,53,0.08);
   --logo-a:        #ff9a5c;
   --logo-b:        #ff6b35;
+  --danger:        #cc2222;
+  --danger-bg:     rgba(180,30,30,0.07);
+  --danger-bg-h:   rgba(180,30,30,0.14);
+  --danger-border: rgba(180,30,30,0.22);
 }
 
 body {
@@ -326,7 +337,7 @@ select {
   cursor: pointer;
   background: var(--bg-cell);
   min-width: 0; min-height: 0;
-  transition: outline 0.08s, background 0.2s;
+  transition: background 0.2s;
   user-select: none;
 }
 .bento-cell::after {
@@ -358,6 +369,7 @@ select {
   color: var(--text-4); font-size: 11px; gap: 5px;
   pointer-events: none;
 }
+.bento-cell.has-photo .cell-placeholder { display: none; }
 .bento-cell.add-tile {
   background: transparent !important;
   border: 2.5px dashed var(--border-mid);
@@ -499,15 +511,15 @@ select {
   cursor: pointer; font-size: 11px;
   transition: background 0.1s;
 }
-.remove-cell-photo:hover { background: #2e1a1a; color: #ff6b6b; }
+.remove-cell-photo:hover { background: var(--danger-bg-h); color: var(--danger); }
 .remove-section-btn {
   width: 100%; padding: 5px;
-  border-radius: 5px; border: 1px solid #4a2020;
-  background: #2e1010; color: #e05555;
+  border-radius: 5px; border: 1px solid var(--danger-border);
+  background: var(--danger-bg); color: var(--danger);
   cursor: pointer; font-size: 11px;
   transition: background 0.1s;
 }
-.remove-section-btn:hover { background: #3e1515; }
+.remove-section-btn:hover { background: var(--danger-bg-h); }
 
 /* Delete button on selected cell */
 .cell-delete-btn {
@@ -987,6 +999,8 @@ let dragPhotoId = null;
 let photoCounter = 0, cellCounter = 0;
 let panState = null; // { cell, el, sx, sy, spx, spy } — single global pan handler avoids per-render listener accumulation
 
+const DEFAULT_CELL = { photoId: null, zoom: 100, panX: 0, panY: 0, bg: '#2a2a2a', radius: 12, shape: 'rounded' };
+
 // ──────────────────────────────────────────────
 // Layout definitions
 // ──────────────────────────────────────────────
@@ -1094,12 +1108,12 @@ function applyLayout(name) {
     return {
       id: ++cellCounter,
       col: c.c, row: c.r, colSpan: c.cs, rowSpan: c.rs,
-      photoId: o.photoId ?? null,
-      zoom: o.zoom ?? 100,
-      panX: o.panX ?? 0, panY: o.panY ?? 0,
-      bg: o.bg ?? '#2a2a2a',
-      radius: o.radius ?? 12,
-      shape:  o.shape  ?? 'rounded'
+      photoId: o.photoId ?? DEFAULT_CELL.photoId,
+      zoom: o.zoom ?? DEFAULT_CELL.zoom,
+      panX: o.panX ?? DEFAULT_CELL.panX, panY: o.panY ?? DEFAULT_CELL.panY,
+      bg: o.bg ?? DEFAULT_CELL.bg,
+      radius: o.radius ?? DEFAULT_CELL.radius,
+      shape:  o.shape  ?? DEFAULT_CELL.shape
     };
   });
   selectedId = null;
@@ -1120,8 +1134,7 @@ function rebuildCustomGrid() {
   cells = [];
   for (let r = 1; r <= gridRows; r++)
     for (let c = 1; c <= gridCols; c++)
-      cells.push({ id: ++cellCounter, col: c, row: r, colSpan: 1, rowSpan: 1,
-                   photoId: null, zoom: 100, panX: 0, panY: 0, bg: '#2a2a2a', radius: 12, shape: 'rounded' });
+      cells.push({ ...DEFAULT_CELL, id: ++cellCounter, col: c, row: r, colSpan: 1, rowSpan: 1 });
   selectedId = null;
   render(); syncProps();
 }
@@ -1279,8 +1292,7 @@ function render() {
       const addTileAction = e => {
         e.stopPropagation();
         pushHistory();
-        cells.push({ id: ++cellCounter, col, row, colSpan: 1, rowSpan: 1,
-                     photoId: null, zoom: 100, panX: 0, panY: 0, bg: '#2a2a2a', radius: 12, shape: 'rounded' });
+        cells.push({ ...DEFAULT_CELL, id: ++cellCounter, col, row, colSpan: 1, rowSpan: 1 });
         render(); syncProps();
       };
       add.addEventListener('click', addTileAction);
@@ -1375,7 +1387,7 @@ function syncProps() {
   empty.style.display='none'; content.style.display='block';
   document.getElementById('colSpanVal').textContent = cell.colSpan;
   document.getElementById('rowSpanVal').textContent = cell.rowSpan;
-  document.getElementById('cellBg').value    = cell.bg || '#2a2a2a';
+  document.getElementById('cellBg').value    = cell.bg || DEFAULT_CELL.bg;
   document.getElementById('cellRadius').value = cell.radius;
   document.getElementById('cellRadiusVal').textContent = cell.radius + 'px';
   // Sync shape picker
@@ -1709,6 +1721,7 @@ function deletePhoto(id) {
 function assignPhoto(cellId, photoId) {
   const cell = cells.find(c => c.id === cellId);
   if (!cell) return;
+  if (cell.photoId === photoId) return;
   pushHistory();
   cell.photoId = photoId; cell.zoom = 100; cell.panX = 0; cell.panY = 0;
   render(); syncProps();
@@ -1801,7 +1814,7 @@ async function exportImage() {
   grid.classList.add('exporting');
   exportBtn.disabled = true;
   exportBtn.textContent = 'Exporting…';
-  await new Promise(r => setTimeout(r, 60));
+  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))); // wait for repaint after deselect
 
   try {
     if (cells.some(c => c.shape === 'diamond' || c.shape === 'hex')) {
@@ -1870,8 +1883,10 @@ function applySnap(snap) {
   canvasCustomW = snap.canvasCustomW;
   canvasCustomH = snap.canvasCustomH;
   canvasUnit = snap.canvasUnit;
-  // Restore photo library only if it changed
-  if (JSON.stringify(photos.map(p => p.id)) !== JSON.stringify(snap.photos.map(p => p.id))) {
+  // Restore photo library only if the set of photos changed (order-independent)
+  const currentIds = [...photos.map(p => p.id)].sort().toString();
+  const snapIds    = [...snap.photos.map(p => p.id)].sort().toString();
+  if (currentIds !== snapIds) {
     photos = snap.photos;
     photoCounter = photos.length ? Math.max(...photos.map(p => p.id)) : 0;
     document.getElementById('photoGrid').innerHTML = '';
@@ -1958,6 +1973,11 @@ function loadProject() {
 function handleLoadFile(e) {
   const file = e.target.files[0];
   if (!file) return;
+  if (file.size > 50 * 1024 * 1024) {
+    showToast('File too large — max 50 MB', true, 3500);
+    e.target.value = '';
+    return;
+  }
   const reader = new FileReader();
   reader.onload = ev => {
     try {
@@ -1977,9 +1997,9 @@ function handleLoadFile(e) {
         zoom:     typeof c.zoom   === 'number' ? c.zoom   : 100,
         panX:     typeof c.panX   === 'number' ? c.panX   : 0,
         panY:     typeof c.panY   === 'number' ? c.panY   : 0,
-        bg:       typeof c.bg     === 'string' ? c.bg     : '#2a2a2a',
-        radius:   typeof c.radius === 'number' ? c.radius : 12,
-        shape:    VALID_SHAPES.includes(c.shape) ? c.shape : 'rounded',
+        bg:       typeof c.bg     === 'string' ? c.bg     : DEFAULT_CELL.bg,
+        radius:   typeof c.radius === 'number' ? c.radius : DEFAULT_CELL.radius,
+        shape:    VALID_SHAPES.includes(c.shape) ? c.shape : DEFAULT_CELL.shape,
       }));
       // Sanitize photos — only keep entries with a valid data URI src
       const rawPhotos = Array.isArray(data.photos) ? data.photos : [];
