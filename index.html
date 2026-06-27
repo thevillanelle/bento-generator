@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Bento Box</title>
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js" crossorigin="anonymous"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -1269,7 +1269,7 @@ function cellsOverlap(a, b) {
 function startResize(cell, el) {
   return function(e) {
     e.preventDefault(); e.stopPropagation();
-    // Bring resizing cell to front so it visually covers others during drag
+    pushHistory(); // snapshot before drag begins so undo restores pre-resize state
     el.style.zIndex = '50';
     const grid = document.getElementById('bentoGrid');
     const gridRect = grid.getBoundingClientRect();
@@ -1297,8 +1297,6 @@ function startResize(cell, el) {
     const onUp = () => {
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
-      pushHistory();
-      // Consume any cells overlapped by the resized cell
       cells = cells.filter(c => c.id === cell.id || !cellsOverlap(cell, c));
       render(); syncProps();
     };
@@ -1405,6 +1403,7 @@ function clearCellPhoto() {
 }
 
 function removeCell() {
+  if (!selectedId) return;
   pushHistory();
   cells = cells.filter(c => c.id !== selectedId);
   selectedId = null;
@@ -1598,7 +1597,20 @@ function addThumb(photo) {
   t.className = 'photo-thumb';
   t.draggable = true;
   t.dataset.pid = photo.id;
-  t.innerHTML = `<img src="${photo.src}" alt="" draggable="false"><div class="thumb-remove" onclick="deletePhoto(${photo.id},event)">×</div>`;
+
+  const img = document.createElement('img');
+  img.src = photo.src;
+  img.alt = '';
+  img.draggable = false;
+
+  const removeBtn = document.createElement('button');
+  removeBtn.className = 'thumb-remove';
+  removeBtn.setAttribute('aria-label', 'Remove photo');
+  removeBtn.textContent = '×';
+  removeBtn.addEventListener('click', e => { e.stopPropagation(); deletePhoto(photo.id); });
+
+  t.appendChild(img);
+  t.appendChild(removeBtn);
   t.addEventListener('dragstart', e => {
     dragPhotoId = photo.id;
     e.dataTransfer.setData('text/plain', String(photo.id));
@@ -1613,8 +1625,7 @@ function addThumb(photo) {
   grid.appendChild(t);
 }
 
-function deletePhoto(id, e) {
-  e.stopPropagation();
+function deletePhoto(id) {
   photos = photos.filter(p => p.id !== id);
   cells.forEach(c => { if (c.photoId === id) c.photoId = null; });
   document.querySelector(`[data-pid="${id}"]`)?.remove();
@@ -1732,7 +1743,8 @@ function snapshot() {
   return JSON.stringify({
     cells, gridCols, gridRows,
     gap, gridRadius, cellSize,
-    canvasPreset, canvasCustomW, canvasCustomH, canvasUnit
+    canvasPreset, canvasCustomW, canvasCustomH, canvasUnit,
+    photos
   });
 }
 
@@ -1747,6 +1759,13 @@ function applySnap(snap) {
   canvasCustomW = snap.canvasCustomW;
   canvasCustomH = snap.canvasCustomH;
   canvasUnit = snap.canvasUnit;
+  // Restore photo library only if it changed
+  if (JSON.stringify(photos.map(p => p.id)) !== JSON.stringify(snap.photos.map(p => p.id))) {
+    photos = snap.photos;
+    photoCounter = photos.length ? Math.max(...photos.map(p => p.id)) : 0;
+    document.getElementById('photoGrid').innerHTML = '';
+    photos.forEach(addThumb);
+  }
   document.getElementById('gapSlider').value = gap;
   document.getElementById('gapVal').textContent = gap + 'px';
   document.getElementById('gridRadiusSlider').value = gridRadius;
@@ -1754,7 +1773,7 @@ function applySnap(snap) {
   document.getElementById('cellSizeSlider').value = cellSize;
   document.getElementById('cellSizeVal').textContent = cellSize + 'px';
   document.getElementById('canvasPresetPicker').value = canvasPreset;
-  document.getElementById('canvasCustomCtrl').style.display = canvasPreset === 'custom' ? '' : 'none';
+  document.getElementById('canvasCustomCtrl').style.display = canvasPreset === 'custom' ? 'flex' : 'none';
   document.getElementById('canvasCustomW').value = canvasCustomW;
   document.getElementById('canvasCustomH').value = canvasCustomH;
   document.getElementById('canvasUnitPicker').value = canvasUnit;
@@ -1829,6 +1848,32 @@ function handleLoadFile(e) {
     try {
       const data = JSON.parse(ev.target.result);
       if (!data.version || !Array.isArray(data.cells)) throw new Error();
+      const VALID_SHAPES = ['rounded','square','circle','squircle','diamond','hex'];
+      const VALID_UNITS  = ['px','in','cm'];
+      const VALID_PRESETS = ['free','1:1','4:5','9:16','16:9','custom'];
+      // Sanitize cells
+      data.cells = data.cells.map(c => ({
+        id:       parseInt(c.id)       || 0,
+        col:      parseInt(c.col)      || 1,
+        row:      parseInt(c.row)      || 1,
+        colSpan:  parseInt(c.colSpan)  || 1,
+        rowSpan:  parseInt(c.rowSpan)  || 1,
+        photoId:  c.photoId != null ? parseInt(c.photoId) : null,
+        zoom:     typeof c.zoom   === 'number' ? c.zoom   : 100,
+        panX:     typeof c.panX   === 'number' ? c.panX   : 0,
+        panY:     typeof c.panY   === 'number' ? c.panY   : 0,
+        bg:       typeof c.bg     === 'string' ? c.bg     : '#2a2a2a',
+        radius:   typeof c.radius === 'number' ? c.radius : 12,
+        shape:    VALID_SHAPES.includes(c.shape) ? c.shape : 'rounded',
+      }));
+      // Sanitize photos — only keep entries with a valid data URI src
+      const rawPhotos = Array.isArray(data.photos) ? data.photos : [];
+      data.photos = rawPhotos.filter(p =>
+        typeof p.src === 'string' && p.src.startsWith('data:image/')
+      ).map(p => ({ id: parseInt(p.id) || 0, src: p.src, name: String(p.name || '') }));
+      // Sanitize scalar fields
+      if (!VALID_PRESETS.includes(data.canvasPreset)) data.canvasPreset = 'free';
+      if (!VALID_UNITS.includes(data.canvasUnit))     data.canvasUnit   = 'px';
       pushHistory();
       cells     = data.cells;
       photos    = data.photos || [];
