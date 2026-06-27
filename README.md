@@ -12,7 +12,6 @@ A browser-based photo layout tool for building bento-style grids. No install, no
 - Pick cell shapes: rounded, square, circle, squircle, diamond, hex
 - Choose from preset layouts or build a custom grid
 - Export as PNG, JPEG, or WebP at up to 4× resolution with preset canvas sizes (1:1, 4:5, 9:16, 16:9) or custom pixel dimensions
-- Save your whole project (photos + layout) as a `.bb` file and reload it later
 
 ## Keyboard shortcuts
 
