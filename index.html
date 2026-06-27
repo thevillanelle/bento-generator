@@ -623,6 +623,7 @@ select {
       <option value="custom">Custom</option>
     </select>
   </div>
+  <button class="btn" onclick="resetApp()" title="Reset everything">↺ Reset</button>
 
   <div class="ctrl" id="customCtrls" style="display:none">
     <label>Cols</label>
@@ -1011,6 +1012,32 @@ function setTheme(name) {
 }
 
 function init() { applyLayout('classic'); }
+
+function resetApp() {
+  if (!confirm('Reset everything? This clears all photos and cells.')) return;
+  photos = []; cells = [];
+  photoCounter = 0; cellCounter = 0;
+  selectedId = null;
+  history = [];
+  gap = 8; gridRadius = 12; cellSize = 140;
+  canvasPreset = 'free'; canvasCustomW = 1080; canvasCustomH = 1080; canvasUnit = 'px';
+  // Sync topbar controls
+  document.getElementById('gapSlider').value = 8;
+  document.getElementById('gapVal').textContent = '8px';
+  document.getElementById('gridRadiusSlider').value = 12;
+  document.getElementById('gridRadiusVal').textContent = '12px';
+  document.getElementById('cellSizeSlider').value = 140;
+  document.getElementById('cellSizeVal').textContent = '140px';
+  document.getElementById('gridBgColor').value = '#1a1a1a';
+  document.getElementById('bentoGrid').style.background = '#1a1a1a';
+  document.getElementById('layoutPicker').value = 'classic';
+  document.getElementById('canvasPresetPicker').value = 'free';
+  document.getElementById('canvasCustomCtrl').style.display = 'none';
+  document.getElementById('canvasUnitPicker').value = 'px';
+  document.getElementById('photoGrid').innerHTML = '';
+  applyLayout('classic');
+  showToast('Reset to defaults');
+}
 
 function applyLayout(name) {
   document.getElementById('customCtrls').style.display = name === 'custom' ? 'flex' : 'none';
