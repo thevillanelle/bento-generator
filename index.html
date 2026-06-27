@@ -978,6 +978,7 @@ let canvasUnit = 'px'; // 'px' | 'in' | 'cm'
 let selectedId = null;
 let dragPhotoId = null;
 let photoCounter = 0, cellCounter = 0;
+let panState = null; // { cell, el, sx, sy, spx, spy } — single global pan handler avoids per-render listener accumulation
 
 // ──────────────────────────────────────────────
 // Layout definitions
@@ -1035,7 +1036,7 @@ function init() { applyLayout('classic'); }
 
 function resetLayout() {
   if (!confirm('Reset the layout? Your photos will stay in the library.')) return;
-  cells = []; cellCounter = 0; selectedId = null; history = []; redoStack = [];
+  cells = []; cellCounter = 0; selectedId = null; undoHistory = []; redoStack = [];
   gap = 8; gridRadius = 12; cellSize = 140;
   canvasPreset = 'free'; canvasCustomW = 1080; canvasCustomH = 1080; canvasUnit = 'px';
   document.getElementById('gapSlider').value = 8;
@@ -1197,28 +1198,13 @@ function render() {
       if (pid) assignPhoto(cell.id, pid);
     });
 
-    // Drag to pan
+    // Drag to pan — mousedown only; move/up handled by single global handler below
     if (cell.photoId) {
-      let panning = false, sx, sy, spx, spy;
       el.addEventListener('mousedown', e => {
         if (e.target.closest('.resize-handle')) return;
-        panning = true; sx = e.clientX; sy = e.clientY;
-        spx = cell.panX; spy = cell.panY;
+        panState = { cell, el, sx: e.clientX, sy: e.clientY, spx: cell.panX, spy: cell.panY };
         e.preventDefault();
       });
-      window.addEventListener('mousemove', e => {
-        if (!panning) return;
-        const scale = cellSize / 100;
-        cell.panX = spx + (e.clientX - sx) / scale;
-        cell.panY = spy + (e.clientY - sy) / scale;
-        const bg = el.querySelector('.cell-bg');
-        if (bg) bg.style.transform = imgTransform(cell);
-        if (cell.id === selectedId) {
-          document.getElementById('panX').value = clamp(cell.panX, -100, 100);
-          document.getElementById('panY').value = clamp(cell.panY, -100, 100);
-        }
-      });
-      window.addEventListener('mouseup', () => { panning = false; });
 
       // Scroll zoom
       el.addEventListener('wheel', e => {
@@ -1746,7 +1732,7 @@ async function exportImage() {
 // ──────────────────────────────────────────────
 // Undo / Redo history
 // ──────────────────────────────────────────────
-let history = [];
+let undoHistory = [];
 let redoStack = [];
 
 function snapshot() {
@@ -1784,21 +1770,21 @@ function applySnap(snap) {
 
 function pushHistory() {
   redoStack = [];
-  history.push(snapshot());
-  if (history.length > 40) history.shift();
+  undoHistory.push(snapshot());
+  if (undoHistory.length > 40) undoHistory.shift();
 }
 
 function undo() {
-  if (!history.length) { showToast('Nothing to undo'); return; }
+  if (!undoHistory.length) { showToast('Nothing to undo'); return; }
   redoStack.push(snapshot());
-  applySnap(JSON.parse(history.pop()));
-  const left = history.length;
+  applySnap(JSON.parse(undoHistory.pop()));
+  const left = undoHistory.length;
   showToast(left ? `Undone  (${left} step${left === 1 ? '' : 's'} left)` : 'Undone');
 }
 
 function redo() {
   if (!redoStack.length) { showToast('Nothing to redo'); return; }
-  history.push(snapshot());
+  undoHistory.push(snapshot());
   applySnap(JSON.parse(redoStack.pop()));
   showToast('Redone');
 }
@@ -1911,6 +1897,22 @@ document.addEventListener('keydown', e => {
     redo();
   }
 });
+
+// Single global pan handlers — registered once, not per-cell per-render
+window.addEventListener('mousemove', e => {
+  if (!panState) return;
+  const { cell, el, sx, sy, spx, spy } = panState;
+  const scale = cellSize / 100;
+  cell.panX = spx + (e.clientX - sx) / scale;
+  cell.panY = spy + (e.clientY - sy) / scale;
+  const bg = el.querySelector('.cell-bg');
+  if (bg) bg.style.transform = imgTransform(cell);
+  if (cell.id === selectedId) {
+    document.getElementById('panX').value = clamp(cell.panX, -100, 100);
+    document.getElementById('panY').value = clamp(cell.panY, -100, 100);
+  }
+});
+window.addEventListener('mouseup', () => { panState = null; });
 
 init();
 </script>
