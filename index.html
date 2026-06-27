@@ -418,7 +418,14 @@ select {
   align-items: center;
   justify-content: center;
 }
-.props-empty { color: var(--text-5); font-size: 12px; text-align: center; padding: 32px 0; }
+.props-empty {
+  color: var(--text-5); font-size: 12px; text-align: center;
+  padding: 40px 16px; display: flex; flex-direction: column;
+  align-items: center; gap: 10px;
+}
+.props-empty-icon { font-size: 28px; opacity: 0.3; }
+.props-empty-label { color: var(--text-4); font-size: 13px; font-weight: 500; }
+.props-empty-sub { color: var(--text-5); font-size: 11px; line-height: 1.5; }
 .prop-section { margin-bottom: 24px; }
 .prop-section-title {
   font-size: 10px; font-weight: 700; color: var(--text-4);
@@ -726,7 +733,11 @@ select {
   <!-- Properties -->
   <div class="properties">
     <div class="props-scroll">
-      <div class="props-empty" id="propsEmpty">Click a cell to edit it</div>
+      <div class="props-empty" id="propsEmpty">
+        <div class="props-empty-icon">⊞</div>
+        <div class="props-empty-label">Click any cell to edit it</div>
+        <div class="props-empty-sub">Adjust size, shape, photo,<br>background &amp; more</div>
+      </div>
       <div id="propsContent" style="display:none">
 
       <div class="prop-section">
@@ -947,12 +958,13 @@ select {
     </div>
     <div class="modal-actions">
       <button class="btn" onclick="hideExportModal()">Cancel</button>
-      <button class="btn primary" onclick="exportImage()">Download</button>
+      <button class="btn primary" id="exportBtn" onclick="exportImage()">Export ↓</button>
     </div>
   </div>
 </div>
 
 <script>
+'use strict';
 // ──────────────────────────────────────────────
 // State
 // ──────────────────────────────────────────────
@@ -1023,7 +1035,7 @@ function init() { applyLayout('classic'); }
 
 function resetLayout() {
   if (!confirm('Reset the layout? Your photos will stay in the library.')) return;
-  cells = []; cellCounter = 0; selectedId = null; history = [];
+  cells = []; cellCounter = 0; selectedId = null; history = []; redoStack = [];
   gap = 8; gridRadius = 12; cellSize = 140;
   canvasPreset = 'free'; canvasCustomW = 1080; canvasCustomH = 1080; canvasUnit = 'px';
   document.getElementById('gapSlider').value = 8;
@@ -1594,7 +1606,10 @@ function loadPhoto(file) {
     const photo = { id: ++photoCounter, src: ev.target.result, name: file.name };
     photos.push(photo);
     addThumb(photo);
+    const totalMB = photos.reduce((s, p) => s + p.src.length * 0.75 / 1048576, 0);
+    if (totalMB > 10) showToast(`Library is ${totalMB.toFixed(0)} MB — large files may slow saves`, false, 4000);
   };
+  reader.onerror = () => showToast('Could not read file: ' + file.name, true, 4000);
   reader.readAsDataURL(file);
 }
 
@@ -1677,6 +1692,7 @@ async function exportImage() {
   const quality = parseInt(document.getElementById('exportQuality').value) / 100;
   const scale   = parseInt(document.getElementById('exportScale').value);
   const grid    = document.getElementById('bentoGrid');
+  const exportBtn = document.getElementById('exportBtn');
 
   // Resolve target canvas size
   const activePreset = document.querySelector('.size-preset-btn.active');
@@ -1693,6 +1709,8 @@ async function exportImage() {
 
   const prev = selectedId; selectedId = null; render();
   grid.classList.add('exporting');
+  exportBtn.disabled = true;
+  exportBtn.textContent = 'Exporting…';
   await new Promise(r => setTimeout(r, 60));
 
   try {
@@ -1713,29 +1731,33 @@ async function exportImage() {
     const url  = finalCanvas.toDataURL(mime, quality);
     const a    = document.createElement('a');
     a.href = url; a.download = `bento.${fmt}`; a.click();
+    hideExportModal();
+    showToast('Image exported');
+  } catch (err) {
+    showToast('Export failed — try a lower scale or simpler shapes', true, 5000);
   } finally {
     grid.classList.remove('exporting');
-    selectedId = prev; render(); hideExportModal();
+    selectedId = prev; render();
+    exportBtn.disabled = false;
+    exportBtn.textContent = 'Export ↓';
   }
 }
 
 // ──────────────────────────────────────────────
-// Undo history
+// Undo / Redo history
 // ──────────────────────────────────────────────
 let history = [];
+let redoStack = [];
 
-function pushHistory() {
-  history.push(JSON.stringify({
+function snapshot() {
+  return JSON.stringify({
     cells, gridCols, gridRows,
     gap, gridRadius, cellSize,
     canvasPreset, canvasCustomW, canvasCustomH, canvasUnit
-  }));
-  if (history.length > 40) history.shift();
+  });
 }
 
-function undo() {
-  if (!history.length) { showToast('Nothing to undo'); return; }
-  const snap = JSON.parse(history.pop());
+function applySnap(snap) {
   cells = snap.cells;
   gridCols = snap.gridCols;
   gridRows = snap.gridRows;
@@ -1746,7 +1768,6 @@ function undo() {
   canvasCustomW = snap.canvasCustomW;
   canvasCustomH = snap.canvasCustomH;
   canvasUnit = snap.canvasUnit;
-  // Sync all UI controls
   document.getElementById('gapSlider').value = gap;
   document.getElementById('gapVal').textContent = gap + 'px';
   document.getElementById('gridRadiusSlider').value = gridRadius;
@@ -1759,7 +1780,27 @@ function undo() {
   document.getElementById('canvasCustomH').value = canvasCustomH;
   document.getElementById('canvasUnitPicker').value = canvasUnit;
   render(); syncProps();
-  showToast('Undone');
+}
+
+function pushHistory() {
+  redoStack = [];
+  history.push(snapshot());
+  if (history.length > 40) history.shift();
+}
+
+function undo() {
+  if (!history.length) { showToast('Nothing to undo'); return; }
+  redoStack.push(snapshot());
+  applySnap(JSON.parse(history.pop()));
+  const left = history.length;
+  showToast(left ? `Undone  (${left} step${left === 1 ? '' : 's'} left)` : 'Undone');
+}
+
+function redo() {
+  if (!redoStack.length) { showToast('Nothing to redo'); return; }
+  history.push(snapshot());
+  applySnap(JSON.parse(redoStack.pop()));
+  showToast('Redone');
 }
 
 // ──────────────────────────────────────────────
@@ -1864,6 +1905,10 @@ document.addEventListener('keydown', e => {
   if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
     e.preventDefault();
     undo();
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'z' && e.shiftKey) {
+    e.preventDefault();
+    redo();
   }
 });
 
