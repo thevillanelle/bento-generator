@@ -1035,7 +1035,101 @@ function setTheme(name) {
   ['dark','light','bb'].forEach(t => document.getElementById('btn-'+t).classList.toggle('active', t === name));
 }
 
-function init() { setTheme(localStorage.getItem('bb-theme') || 'dark'); applyLayout('classic'); }
+// ──────────────────────────────────────────────
+// Persistence (IndexedDB)
+// ──────────────────────────────────────────────
+const _DB_NAME = 'bento-box', _DB_VER = 1, _DB_STORE = 'state', _DB_KEY = 'session';
+let _db = null, _saveTimer = null;
+
+function _openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(_DB_NAME, _DB_VER);
+    req.onupgradeneeded = e => e.target.result.createObjectStore(_DB_STORE);
+    req.onsuccess = e => resolve(e.target.result);
+    req.onerror   = () => reject(req.error);
+  });
+}
+function _dbGet(key) {
+  return new Promise((resolve, reject) => {
+    const req = _db.transaction(_DB_STORE, 'readonly').objectStore(_DB_STORE).get(key);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror   = () => reject(req.error);
+  });
+}
+function _dbPut(key, val) {
+  return new Promise((resolve, reject) => {
+    const req = _db.transaction(_DB_STORE, 'readwrite').objectStore(_DB_STORE).put(val, key);
+    req.onsuccess = () => resolve();
+    req.onerror   = () => reject(req.error);
+  });
+}
+
+function scheduleAutoSave() {
+  if (!_db) return;
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(_autoSave, 600);
+}
+async function _autoSave() {
+  if (!_db) return;
+  try {
+    await _dbPut(_DB_KEY, {
+      cells, gridCols, gridRows, gap, gridRadius, cellSize,
+      canvasPreset, canvasCustomW, canvasCustomH, canvasUnit,
+      photos,
+      gridBg: document.getElementById('gridBgColor').value,
+      theme:  document.documentElement.dataset.theme || 'dark'
+    });
+  } catch (_) {}
+}
+
+function _restoreState(s) {
+  setTheme(s.theme || localStorage.getItem('bb-theme') || 'dark');
+  cells    = Array.isArray(s.cells)  ? s.cells  : [];
+  photos   = Array.isArray(s.photos) ? s.photos : [];
+  gridCols = s.gridCols ?? 4;
+  gridRows = s.gridRows ?? 3;
+  gap      = s.gap      ?? 8;
+  gridRadius = s.gridRadius ?? 12;
+  cellSize   = s.cellSize   ?? 140;
+  canvasPreset  = s.canvasPreset  ?? 'free';
+  canvasCustomW = s.canvasCustomW ?? 1080;
+  canvasCustomH = s.canvasCustomH ?? 1080;
+  canvasUnit    = s.canvasUnit    ?? 'px';
+  cellCounter  = cells.length  ? Math.max(...cells.map(c => c.id))  : 0;
+  photoCounter = photos.length ? Math.max(...photos.map(p => p.id)) : 0;
+  if (s.gridBg) {
+    document.getElementById('gridBgColor').value = s.gridBg;
+    document.getElementById('bentoGrid').style.background = s.gridBg;
+  }
+  document.getElementById('cellSizeSlider').value    = cellSize;
+  document.getElementById('cellSizeVal').textContent = cellSize + 'px';
+  document.getElementById('gapSlider').value         = gap;
+  document.getElementById('gapVal').textContent      = gap + 'px';
+  document.getElementById('gridRadiusSlider').value    = gridRadius;
+  document.getElementById('gridRadiusVal').textContent = gridRadius + 'px';
+  document.getElementById('canvasPresetPicker').value  = canvasPreset;
+  document.getElementById('canvasUnitPicker').value    = canvasUnit;
+  document.getElementById('canvasCustomCtrl').style.display = canvasPreset === 'custom' ? 'flex' : 'none';
+  if (canvasPreset === 'custom') {
+    document.getElementById('canvasCustomW').value = canvasCustomW;
+    document.getElementById('canvasCustomH').value = canvasCustomH;
+  }
+  document.getElementById('photoGrid').innerHTML = '';
+  photos.forEach(addThumb);
+  render(); syncProps();
+}
+
+async function init() {
+  _db = await _openDB().catch(() => null);
+  let restored = false;
+  if (_db) {
+    try {
+      const saved = await _dbGet(_DB_KEY);
+      if (saved && Array.isArray(saved.cells)) { _restoreState(saved); restored = true; }
+    } catch (_) {}
+  }
+  if (!restored) { setTheme(localStorage.getItem('bb-theme') || 'dark'); applyLayout('classic'); }
+}
 
 function resetLayout() {
   if (!confirm('Reset the layout? Your photos will stay in the library.')) return;
@@ -1279,6 +1373,9 @@ function render() {
       grid.appendChild(add);
     }
   }
+}
+
+  scheduleAutoSave();
 }
 
 function imgTransform(cell) {
@@ -1640,6 +1737,7 @@ function loadPhoto(file) {
     const photo = { id: ++photoCounter, src: ev.target.result, name: file.name };
     photos.push(photo);
     addThumb(photo);
+    scheduleAutoSave();
     const totalMB = photos.reduce((s, p) => s + p.src.length * 0.75 / 1048576, 0);
     if (totalMB > 10) showToast(`Library is ${totalMB.toFixed(0)} MB — large files may slow saves`, false, 4000);
   };
