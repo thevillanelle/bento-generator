@@ -634,12 +634,18 @@ select {
       <option value="16:9">16:9</option>
       <option value="custom">Custom…</option>
     </select>
+    <input type="color" id="gridBgColor" value="#1a1a1a" oninput="updateGridBg(this.value)" title="Canvas color">
   </div>
 
   <div class="ctrl" id="canvasCustomCtrl" style="display:none">
-    <input type="number" id="canvasCustomW" value="1080" min="100" max="8000" oninput="setCanvasCustomDim()" style="width:52px">
+    <input type="number" id="canvasCustomW" value="1080" min="1" max="99999" oninput="setCanvasCustomDim()" style="width:52px">
     <span>×</span>
-    <input type="number" id="canvasCustomH" value="1080" min="100" max="8000" oninput="setCanvasCustomDim()" style="width:52px">
+    <input type="number" id="canvasCustomH" value="1080" min="1" max="99999" oninput="setCanvasCustomDim()" style="width:52px">
+    <select id="canvasUnitPicker" onchange="setCanvasUnit(this.value)" style="width:44px">
+      <option value="px">px</option>
+      <option value="in">in</option>
+      <option value="cm">cm</option>
+    </select>
   </div>
 
   <div class="topbar-sep"></div>
@@ -654,11 +660,6 @@ select {
     <label>Gap</label>
     <input type="range" id="gapSlider" min="0" max="24" value="8" oninput="updateGap(this.value)">
     <span id="gapVal">8px</span>
-  </div>
-
-  <div class="ctrl">
-    <label>Grid BG</label>
-    <input type="color" id="gridBgColor" value="#1a1a1a" oninput="updateGridBg(this.value)">
   </div>
 
   <div class="ctrl">
@@ -943,6 +944,7 @@ let gridCols = 4, gridRows = 3;
 let cellSize = 140, gap = 8, gridRadius = 12;
 let canvasPreset = 'free';
 let canvasCustomW = 1080, canvasCustomH = 1080;
+let canvasUnit = 'px'; // 'px' | 'in' | 'cm'
 let selectedId = null;
 let dragPhotoId = null;
 let photoCounter = 0, cellCounter = 0;
@@ -1382,11 +1384,43 @@ function setCanvasPreset(val) {
 }
 
 function setCanvasCustomDim() {
-  canvasCustomW = parseInt(document.getElementById('canvasCustomW').value) || 1080;
-  canvasCustomH = parseInt(document.getElementById('canvasCustomH').value) || 1080;
+  const rawW = parseFloat(document.getElementById('canvasCustomW').value) || 1080;
+  const rawH = parseFloat(document.getElementById('canvasCustomH').value) || 1080;
+  canvasCustomW = Math.round(toPx(rawW));
+  canvasCustomH = Math.round(toPx(rawH));
   render();
   syncExportPreset();
 }
+
+function setCanvasUnit(val) {
+  const oldUnit = canvasUnit;
+  canvasUnit = val;
+  // Convert displayed values from old unit to new unit
+  const wInput = document.getElementById('canvasCustomW');
+  const hInput = document.getElementById('canvasCustomH');
+  const rawW = parseFloat(wInput.value) || 1;
+  const rawH = parseFloat(hInput.value) || 1;
+  const pxW = Math.round(toPxFrom(rawW, oldUnit));
+  const pxH = Math.round(toPxFrom(rawH, oldUnit));
+  wInput.value = round2(fromPx(pxW));
+  hInput.value = round2(fromPx(pxH));
+  canvasCustomW = pxW;
+  canvasCustomH = pxH;
+  render();
+}
+
+function toPx(val) { return toPxFrom(val, canvasUnit); }
+function toPxFrom(val, unit) {
+  if (unit === 'in') return val * 300;
+  if (unit === 'cm') return val * (300 / 2.54);
+  return val;
+}
+function fromPx(px) {
+  if (canvasUnit === 'in') return px / 300;
+  if (canvasUnit === 'cm') return px / (300 / 2.54);
+  return px;
+}
+function round2(n) { return Math.round(n * 100) / 100; }
 
 function syncExportPreset() {
   // Keep export modal in sync with canvas picker
@@ -1679,7 +1713,7 @@ function saveProject() {
   const data = {
     version: 1,
     gridCols, gridRows, gap, gridRadius, cellSize,
-    canvasPreset, canvasCustomW, canvasCustomH,
+    canvasPreset, canvasCustomW, canvasCustomH, canvasUnit,
     cells, photos
   };
   const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
@@ -1714,6 +1748,7 @@ function handleLoadFile(e) {
       canvasPreset  = data.canvasPreset  ?? 'free';
       canvasCustomW = data.canvasCustomW ?? 1080;
       canvasCustomH = data.canvasCustomH ?? 1080;
+      canvasUnit    = data.canvasUnit    ?? 'px';
       cellCounter  = cells.length  ? Math.max(...cells.map(c => c.id))  : 0;
       photoCounter = photos.length ? Math.max(...photos.map(p => p.id)) : 0;
       // Rebuild photo thumbnails
@@ -1727,6 +1762,7 @@ function handleLoadFile(e) {
       document.getElementById('gridRadiusSlider').value = gridRadius;
       document.getElementById('gridRadiusVal').textContent = gridRadius + 'px';
       document.getElementById('canvasPresetPicker').value = canvasPreset;
+      document.getElementById('canvasUnitPicker').value = canvasUnit;
       document.getElementById('canvasCustomCtrl').style.display = canvasPreset === 'custom' ? 'flex' : 'none';
       if (canvasPreset === 'custom') {
         document.getElementById('canvasCustomW').value = canvasCustomW;
