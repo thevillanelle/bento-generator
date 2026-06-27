@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Bento Box</title>
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js" crossorigin="anonymous"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -392,9 +391,7 @@ select {
   color: var(--border-mid);
   transition: color 0.15s;
 }
-.bento-cell.add-tile:hover .add-tile-plus { color: var(--accent); }
-.bento-grid.exporting .bento-cell.add-tile { display: none; }
-.resize-handle {
+.bento-cell.add-tile:hover .add-tile-plus { color: var(--accent); }.resize-handle {
   position: absolute; bottom: 0; right: 0;
   width: 18px; height: 18px;
   cursor: se-resize;
@@ -938,15 +935,6 @@ select {
       <label>Quality — <span id="qualityLabel">90%</span></label>
       <input type="range" id="exportQuality" min="10" max="100" value="90"
              oninput="document.getElementById('qualityLabel').textContent=this.value+'%'">
-    </div>
-    <div class="modal-row">
-      <label>Resolution</label>
-      <select id="exportScale">
-        <option value="1">1× — screen</option>
-        <option value="2" selected>2× — retina</option>
-        <option value="3">3× — high-res</option>
-        <option value="4">4× — print</option>
-      </select>
     </div>
     <div class="modal-row">
       <label>Canvas Size</label>
@@ -1781,13 +1769,10 @@ function selectSizePreset(btn) {
 }
 
 async function exportImage() {
-  const fmt     = document.getElementById('exportFmt').value;
-  const quality = parseInt(document.getElementById('exportQuality').value) / 100;
-  const scale   = parseInt(document.getElementById('exportScale').value);
-  const grid    = document.getElementById('bentoGrid');
+  const fmt       = document.getElementById('exportFmt').value;
+  const quality   = parseInt(document.getElementById('exportQuality').value) / 100;
   const exportBtn = document.getElementById('exportBtn');
 
-  // Resolve target canvas size
   const activePreset = document.querySelector('.size-preset-btn.active');
   let targetW = null, targetH = null;
   if (activePreset) {
@@ -1800,33 +1785,15 @@ async function exportImage() {
     }
   }
 
-  const prev = selectedId; selectedId = null; render();
-  grid.classList.add('exporting');
   exportBtn.disabled = true;
   exportBtn.textContent = 'Exporting…';
-  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))); // wait for repaint after deselect
 
   try {
-    if (cells.some(c => c.shape === 'diamond' || c.shape === 'hex')) {
-      showToast('Diamond/hex shapes may not export correctly with this renderer', false, 4000);
-    }
-    const canvas = await html2canvas(grid, {
-      scale, useCORS: true, allowTaint: true,
-      backgroundColor: null, logging: false
-    });
-
-    let finalCanvas = canvas;
-    if (targetW && targetH) {
-      finalCanvas = document.createElement('canvas');
-      finalCanvas.width  = targetW;
-      finalCanvas.height = targetH;
-      finalCanvas.getContext('2d').drawImage(canvas, 0, 0, targetW, targetH);
-    }
-
-    const mime = { png: 'image/png', jpeg: 'image/jpeg', webp: 'image/webp' }[fmt];
-    const url  = finalCanvas.toDataURL(mime, quality);
-    const ext  = url.startsWith('data:image/webp') ? fmt : 'png';
-    const a    = document.createElement('a');
+    const canvas = await _renderToCanvas(targetW, targetH);
+    const mime   = { png: 'image/png', jpeg: 'image/jpeg', webp: 'image/webp' }[fmt];
+    const url    = canvas.toDataURL(mime, quality);
+    const ext    = url.startsWith('data:image/webp') ? 'webp' : (fmt === 'jpeg' ? 'jpeg' : 'png');
+    const a      = document.createElement('a');
     a.href = url; a.download = `bento.${ext}`;
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     hideExportModal();
@@ -1836,13 +1803,140 @@ async function exportImage() {
       showToast('Image exported');
     }
   } catch (err) {
-    showToast('Export failed — try a lower scale or simpler shapes', true, 5000);
+    showToast('Export failed', true, 5000);
   } finally {
-    grid.classList.remove('exporting');
     exportBtn.disabled = false;
     exportBtn.textContent = 'Export ↓';
-    selectedId = prev; try { render(); } catch(_) {}
   }
+}
+
+async function _renderToCanvas(targetW, targetH) {
+  const ratio = getCanvasRatio();
+  let naturalW, naturalH, colW, rowH;
+  if (ratio) {
+    const [rw, rh] = ratio;
+    naturalW = gridCols * cellSize + (gridCols - 1) * gap;
+    naturalH = Math.round(naturalW * rh / rw);
+    colW = (naturalW - gap * (gridCols - 1)) / gridCols;
+    rowH = (naturalH - gap * (gridRows - 1)) / gridRows;
+  } else {
+    colW = cellSize; rowH = cellSize;
+    naturalW = gridCols * cellSize + (gridCols - 1) * gap;
+    naturalH = gridRows * cellSize + (gridRows - 1) * gap;
+  }
+
+  const outW = targetW || naturalW;
+  const outH = targetH || naturalH;
+  const sx   = outW / naturalW;
+  const sy   = outH / naturalH;
+
+  // Preload only the photos that are actually used
+  const imgCache = {};
+  const usedIds  = new Set(cells.map(c => c.photoId).filter(Boolean));
+  await Promise.all([...usedIds].map(id => {
+    const photo = photos.find(p => p.id === id);
+    if (!photo) return;
+    return new Promise(res => {
+      const img = new Image();
+      img.onload  = () => { imgCache[id] = img; res(); };
+      img.onerror = res;
+      img.src = photo.src;
+    });
+  }));
+
+  const canvas  = document.createElement('canvas');
+  canvas.width  = outW;
+  canvas.height = outH;
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+
+  // Grid background + outer rounded clip
+  const gr = gridRadius * Math.min(sx, sy);
+  ctx.save();
+  _rrPath(ctx, 0, 0, outW, outH, gr);
+  ctx.fillStyle = document.getElementById('gridBgColor').value;
+  ctx.fill();
+  ctx.clip();
+
+  for (const cell of cells) {
+    const cx = (cell.col - 1) * (colW + gap) * sx;
+    const cy = (cell.row - 1) * (rowH + gap) * sy;
+    const cw = (cell.colSpan * colW + (cell.colSpan - 1) * gap) * sx;
+    const ch = (cell.rowSpan * rowH + (cell.rowSpan - 1) * gap) * sy;
+
+    ctx.save();
+    _cellPath(ctx, cell, cx, cy, cw, ch, Math.min(sx, sy));
+    ctx.fillStyle = cell.bg;
+    ctx.fill();
+    ctx.clip();
+
+    if (cell.photoId && imgCache[cell.photoId]) {
+      ctx.save();
+      _drawCoverPhoto(ctx, imgCache[cell.photoId], cx, cy, cw, ch, cell.zoom, cell.panX, cell.panY);
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  ctx.restore();
+  return canvas;
+}
+
+function _rrPath(ctx, x, y, w, h, r) {
+  r = Math.max(0, Math.min(r, w / 2, h / 2));
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y,     x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x,     y + h, r);
+  ctx.arcTo(x,     y + h, x,     y,     r);
+  ctx.arcTo(x,     y,     x + w, y,     r);
+  ctx.closePath();
+}
+
+function _cellPath(ctx, cell, x, y, w, h, scale) {
+  const r = cell.radius * scale;
+  ctx.beginPath();
+  switch (cell.shape) {
+    case 'rect':    ctx.rect(x, y, w, h); break;
+    case 'rounded': _rrPath(ctx, x, y, w, h, r); break;
+    case 'circle':  ctx.arc(x + w / 2, y + h / 2, Math.min(w, h) / 2, 0, Math.PI * 2); break;
+    case 'squircle': {
+      const pct = Math.round(cell.radius * 2.5 + 20) / 100;
+      _rrPath(ctx, x, y, w, h, Math.min(Math.min(w, h) * pct, w / 2, h / 2));
+      break;
+    }
+    case 'diamond':
+      ctx.moveTo(x + w * 0.5, y);
+      ctx.lineTo(x + w,       y + h * 0.5);
+      ctx.lineTo(x + w * 0.5, y + h);
+      ctx.lineTo(x,           y + h * 0.5);
+      ctx.closePath();
+      break;
+    case 'hex':
+      ctx.moveTo(x + w * 0.25, y);
+      ctx.lineTo(x + w * 0.75, y);
+      ctx.lineTo(x + w,        y + h * 0.5);
+      ctx.lineTo(x + w * 0.75, y + h);
+      ctx.lineTo(x + w * 0.25, y + h);
+      ctx.lineTo(x,            y + h * 0.5);
+      ctx.closePath();
+      break;
+    default: ctx.rect(x, y, w, h);
+  }
+}
+
+function _drawCoverPhoto(ctx, img, x, y, w, h, zoom, panX, panY) {
+  const cs = Math.max(w / img.naturalWidth, h / img.naturalHeight);
+  const iw = img.naturalWidth  * cs;
+  const ih = img.naturalHeight * cs;
+  const z  = zoom / 100;
+  const tx = panX / 100 * w;
+  const ty = panY / 100 * h;
+  ctx.translate(x + w / 2, y + h / 2);
+  ctx.scale(z, z);
+  ctx.translate(tx, ty);
+  ctx.drawImage(img, -iw / 2, -ih / 2, iw, ih);
 }
 
 // ──────────────────────────────────────────────
