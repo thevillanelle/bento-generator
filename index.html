@@ -1689,6 +1689,12 @@ function addThumb(photo) {
     dragPhotoId = photo.id;
     e.dataTransfer.setData('text/plain', String(photo.id));
     e.dataTransfer.effectAllowed = 'copy';
+    const ghost = document.createElement('img');
+    ghost.src = photo.src;
+    ghost.style.cssText = 'width:56px;height:56px;object-fit:cover;border-radius:6px;position:fixed;left:-9999px;top:0';
+    document.body.appendChild(ghost);
+    e.dataTransfer.setDragImage(ghost, 28, 28);
+    requestAnimationFrame(() => ghost.remove());
     t.classList.add('dragging');
   });
   t.addEventListener('dragend', () => {
