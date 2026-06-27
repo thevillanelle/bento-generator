@@ -282,10 +282,11 @@ select {
   width: 16px; height: 16px;
   background: rgba(0,0,0,0.75);
   border-radius: 50%;
+  border: none;
   display: none;
   align-items: center; justify-content: center;
   font-size: 9px; cursor: pointer; color: #fff;
-  line-height: 1;
+  line-height: 1; padding: 0;
 }
 .photo-thumb:hover .thumb-remove { display: flex; }
 
@@ -833,11 +834,11 @@ select {
 </div>
 
 <!-- Help Modal -->
-<div class="modal-overlay" id="helpModal" style="display:none" onclick="if(event.target===this)hideHelpModal()">
+<div class="modal-overlay" id="helpModal" style="display:none" onclick="if(event.target===this)hideHelpModal()" role="dialog" aria-modal="true" aria-labelledby="helpModalTitle">
   <div class="modal" style="width:420px;max-height:80vh;overflow-y:auto">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
-      <h2 style="margin:0">How to use</h2>
-      <button onclick="hideHelpModal()" style="background:none;border:none;color:#666;font-size:18px;cursor:pointer;line-height:1;padding:2px 6px">×</button>
+      <h2 id="helpModalTitle" style="margin:0">How to use</h2>
+      <button onclick="hideHelpModal()" aria-label="Close help" style="background:none;border:none;color:#666;font-size:18px;cursor:pointer;line-height:1;padding:2px 6px">×</button>
     </div>
     <div class="help-steps">
       <div class="help-step">
@@ -886,7 +887,7 @@ select {
         <div class="help-num">7</div>
         <div>
           <strong>Delete &amp; undo</strong>
-          <p>Click the <em>×</em> on any cell to remove it, or select a cell and press <em>Delete / Backspace</em>. Press <em>Cmd/Ctrl + Z</em> to undo any change — up to 40 steps back.</p>
+          <p>Click the <em>×</em> on any cell to remove it, or select a cell and press <em>Delete / Backspace</em>. Press <em>Cmd/Ctrl + Z</em> to undo, <em>Cmd/Ctrl + Shift + Z</em> to redo — up to 40 steps. Press <em>Escape</em> to close any dialog.</p>
         </div>
       </div>
       <div class="help-step">
@@ -908,15 +909,15 @@ select {
 </div>
 
 <!-- Toast container -->
-<div id="toastContainer"></div>
+<div id="toastContainer" aria-live="polite" aria-atomic="false"></div>
 
 <!-- Hidden file inputs -->
 <input type="file" id="loadInput" accept=".bb,.json" style="display:none" onchange="handleLoadFile(event)">
 
 <!-- Export Modal -->
-<div class="modal-overlay" id="exportModal" style="display:none" onclick="if(event.target===this)hideExportModal()">
+<div class="modal-overlay" id="exportModal" style="display:none" onclick="if(event.target===this)hideExportModal()" role="dialog" aria-modal="true" aria-labelledby="exportModalTitle">
   <div class="modal">
-    <h2>Export Image</h2>
+    <h2 id="exportModalTitle">Export Image</h2>
     <div class="modal-row">
       <label>Format</label>
       <select id="exportFmt" onchange="toggleQuality()">
@@ -957,7 +958,7 @@ select {
       </div>
     </div>
     <div class="modal-actions">
-      <button class="btn" onclick="hideExportModal()">Cancel</button>
+      <button class="btn" onclick="hideExportModal()" aria-label="Cancel export">Cancel</button>
       <button class="btn primary" id="exportBtn" onclick="exportImage()">Export ↓</button>
     </div>
   </div>
@@ -1644,7 +1645,6 @@ function assignPhoto(cellId, photoId) {
 // Export
 // ──────────────────────────────────────────────
 function showExportModal() {
-  // Sync export canvas preset to match the active canvas dimensions
   const ratio = getCanvasRatio();
   if (ratio && canvasPreset !== 'custom') {
     const label = { '1:1':'1:1 — 1080', '4:5':'4:5 — Portrait', '9:16':'9:16 — Story', '16:9':'16:9 — Wide' }[canvasPreset];
@@ -1659,11 +1659,37 @@ function showExportModal() {
     document.getElementById('exportCanvasH').value = canvasCustomH;
     document.getElementById('sizeCustomInputs').style.display = 'flex';
   }
-  document.getElementById('exportModal').style.display = 'flex';
+  _openModal('exportModal');
 }
-function hideExportModal() { document.getElementById('exportModal').style.display = 'none'; }
-function showHelpModal()   { document.getElementById('helpModal').style.display = 'flex'; }
-function hideHelpModal()   { document.getElementById('helpModal').style.display = 'none'; }
+function hideExportModal() { _closeModal('exportModal'); }
+function showHelpModal()   { _openModal('helpModal'); }
+function hideHelpModal()   { _closeModal('helpModal'); }
+let _modalReturnFocus = null;
+
+function _openModal(id) {
+  _modalReturnFocus = document.activeElement;
+  const modal = document.getElementById(id);
+  modal.style.display = 'flex';
+  const first = modal.querySelector('button, input, select, [tabindex]:not([tabindex="-1"])');
+  if (first) first.focus();
+  modal.addEventListener('keydown', _trapFocus);
+}
+
+function _closeModal(id) {
+  const modal = document.getElementById(id);
+  modal.style.display = 'none';
+  modal.removeEventListener('keydown', _trapFocus);
+  if (_modalReturnFocus) { _modalReturnFocus.focus(); _modalReturnFocus = null; }
+}
+
+function _trapFocus(e) {
+  if (e.key !== 'Tab') return;
+  const focusable = [...this.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])')];
+  if (!focusable.length) return;
+  const first = focusable[0], last = focusable[focusable.length - 1];
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+}
 
 function toggleQuality() {
   const fmt = document.getElementById('exportFmt').value;
