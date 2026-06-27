@@ -736,8 +736,7 @@ select {
       <div>Drop or click<br>to add photos</div>
     </div>
     <div class="library-actions">
-      <button class="btn library-action-btn" onclick="saveProject()" title="Save project as .bb file">Save ↓</button>
-      <button class="btn library-action-btn" onclick="loadProject()" title="Load a saved .bb project file">Load ↑</button>
+      <button class="btn library-action-btn" onclick="document.getElementById('fileInput').click()" title="Add photos">Add ↑</button>
       <button class="btn library-action-btn" onclick="clearPhotos()" title="Clear all photos from the library">⊗ Clear</button>
     </div>
     <div class="photo-grid" id="photoGrid"></div>
@@ -908,15 +907,8 @@ select {
           <p>Click the <em>×</em> on any cell to remove it, or select a cell and press <em>Delete / Backspace</em>. Press <em>Cmd/Ctrl + Z</em> to undo, <em>Cmd/Ctrl + Shift + Z</em> to redo — up to 40 steps. Press <em>Escape</em> to close any dialog.</p>
         </div>
       </div>
-      <div class="help-step">
-        <div class="help-num">8</div>
-        <div>
-          <strong>Load a project</strong>
-          <p>Use <em>Load ↑</em> in the Photos panel to restore a previously saved <code>.bb</code> project file — photos, layout, canvas size, and all.</p>
-        </div>
-      </div>
       <div class="help-step" style="border-bottom:none">
-        <div class="help-num">9</div>
+        <div class="help-num">8</div>
         <div>
           <strong>Export</strong>
           <p>Click <em>Export Image ↓</em> to download your bento box as PNG, JPEG, or WebP. The canvas size you set in the nav pre-fills the export dimensions. Scale up to 4× for high-res or print output.</p>
@@ -930,8 +922,6 @@ select {
 <div id="toastContainer" aria-live="polite" aria-atomic="false"></div>
 
 <!-- Hidden file inputs -->
-<input type="file" id="loadInput" accept=".bb,.json" style="display:none" onchange="handleLoadFile(event)">
-
 <!-- Export Modal -->
 <div class="modal-overlay" id="exportModal" style="display:none" onclick="if(event.target===this)hideExportModal()" role="dialog" aria-modal="true" aria-labelledby="exportModalTitle">
   <div class="modal">
@@ -1942,120 +1932,6 @@ function showToast(msg, isError = false, duration = 2600) {
     setTimeout(() => t.remove(), 300);
   }, duration);
   return t;
-}
-
-// ──────────────────────────────────────────────
-// Save / Load project
-// ──────────────────────────────────────────────
-function saveProject() {
-  const data = {
-    version: 1,
-    gridCols, gridRows, gap, gridRadius, cellSize,
-    canvasPreset, canvasCustomW, canvasCustomH, canvasUnit,
-    cells, photos,
-    gridBg: document.getElementById('gridBgColor').value
-  };
-  const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'bento-project.bb';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(a.href), 100);
-  showToast('Project saved as .bb file');
-}
-
-function loadProject() {
-  document.getElementById('loadInput').click();
-}
-
-function handleLoadFile(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-  if (file.size > 50 * 1024 * 1024) {
-    showToast('File too large — max 50 MB', true, 3500);
-    e.target.value = '';
-    return;
-  }
-  const reader = new FileReader();
-  reader.onload = ev => {
-    try {
-      const data = JSON.parse(ev.target.result);
-      if (!data.version || !Array.isArray(data.cells)) throw new Error();
-      const VALID_SHAPES = ['rounded','rect','circle','squircle','diamond','hex'];
-      const VALID_UNITS  = ['px','in','cm'];
-      const VALID_PRESETS = ['free','1:1','4:5','9:16','16:9','custom'];
-      // Sanitize cells
-      data.cells = data.cells.map(c => ({
-        id:       parseInt(c.id)       || 0,
-        col:      parseInt(c.col)      || 1,
-        row:      parseInt(c.row)      || 1,
-        colSpan:  parseInt(c.colSpan)  || 1,
-        rowSpan:  parseInt(c.rowSpan)  || 1,
-        photoId:  c.photoId != null ? parseInt(c.photoId) : null,
-        zoom:     typeof c.zoom   === 'number' ? c.zoom   : 100,
-        panX:     typeof c.panX   === 'number' ? c.panX   : 0,
-        panY:     typeof c.panY   === 'number' ? c.panY   : 0,
-        bg:       typeof c.bg     === 'string' ? c.bg     : DEFAULT_CELL.bg,
-        radius:   typeof c.radius === 'number' ? c.radius : DEFAULT_CELL.radius,
-        shape:    VALID_SHAPES.includes(c.shape) ? c.shape : DEFAULT_CELL.shape,
-      }));
-      // Sanitize photos — only keep entries with a valid data URI src
-      const rawPhotos = Array.isArray(data.photos) ? data.photos : [];
-      data.photos = rawPhotos.filter(p =>
-        typeof p.src === 'string' && p.src.startsWith('data:image/')
-      ).map(p => ({ id: parseInt(p.id) || 0, src: p.src, name: String(p.name || '') }));
-      // Deduplicate by ID and reject id <= 0 to prevent ghost records
-      data.cells  = data.cells.filter((c, i, a) => c.id > 0 && a.findIndex(x => x.id === c.id) === i);
-      data.photos = data.photos.filter((p, i, a) => p.id > 0 && a.findIndex(x => x.id === p.id) === i);
-      // Cross-check cell photoIds against surviving photos
-      const validPhotoIds = new Set(data.photos.map(p => p.id));
-      data.cells.forEach(c => { if (c.photoId !== null && !validPhotoIds.has(c.photoId)) c.photoId = null; });
-      // Sanitize scalar fields
-      if (!VALID_PRESETS.includes(data.canvasPreset)) data.canvasPreset = 'free';
-      if (!VALID_UNITS.includes(data.canvasUnit))     data.canvasUnit   = 'px';
-      pushHistory();
-      cells     = data.cells;
-      photos    = data.photos || [];
-      gridCols   = Math.min(Math.max(parseInt(data.gridCols) || 4, 1), 8);
-      gridRows   = Math.min(Math.max(parseInt(data.gridRows) || 3, 1), 8);
-      cellSize   = Math.min(Math.max(data.cellSize ?? 140, 80), 220);
-      gap        = Math.min(Math.max(data.gap ?? 8, 0), 24);
-      gridRadius = Math.min(Math.max(data.gridRadius ?? 12, 0), 40);
-      canvasPreset  = data.canvasPreset  ?? 'free';
-      canvasCustomW = data.canvasCustomW ?? 1080;
-      canvasCustomH = data.canvasCustomH ?? 1080;
-      canvasUnit    = data.canvasUnit    ?? 'px';
-      cellCounter  = cells.length  ? Math.max(...cells.map(c => c.id))  : 0;
-      photoCounter = photos.length ? Math.max(...photos.map(p => p.id)) : 0;
-      // Rebuild photo thumbnails
-      document.getElementById('photoGrid').innerHTML = '';
-      photos.forEach(addThumb);
-      // Sync sliders
-      document.getElementById('cellSizeSlider').value = cellSize;
-      document.getElementById('cellSizeVal').textContent = cellSize + 'px';
-      document.getElementById('gapSlider').value = gap;
-      document.getElementById('gapVal').textContent = gap + 'px';
-      document.getElementById('gridRadiusSlider').value = gridRadius;
-      document.getElementById('gridRadiusVal').textContent = gridRadius + 'px';
-      document.getElementById('canvasPresetPicker').value = canvasPreset;
-      document.getElementById('canvasUnitPicker').value = canvasUnit;
-      document.getElementById('canvasCustomCtrl').style.display = canvasPreset === 'custom' ? 'flex' : 'none';
-      if (canvasPreset === 'custom') {
-        document.getElementById('canvasCustomW').value = canvasCustomW;
-        document.getElementById('canvasCustomH').value = canvasCustomH;
-      }
-      selectedId = null;
-      render(); syncProps();
-      showToast('Project loaded');
-    } catch {
-      showToast('Could not read project file', true, 3500);
-    }
-  };
-  reader.onerror = () => showToast('Could not read project file', true, 3500);
-  reader.readAsText(file);
-  e.target.value = '';
 }
 
 // ──────────────────────────────────────────────
