@@ -1899,17 +1899,25 @@ async function exportImage() {
   try {
     const canvas = await _renderToCanvas(targetW, targetH);
     const mime   = { png: 'image/png', jpeg: 'image/jpeg', webp: 'image/webp' }[fmt];
-    const url    = canvas.toDataURL(mime, quality);
-    const ext    = url.startsWith('data:image/webp') ? 'webp' : (fmt === 'jpeg' ? 'jpeg' : 'png');
-    const a      = document.createElement('a');
-    a.href = url; a.download = `bento.${ext}`;
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    hideExportModal();
-    if (fmt === 'webp' && !url.startsWith('data:image/webp')) {
-      showToast('WebP not supported in this browser — saved as PNG', false, 3500);
-    } else {
-      showToast('Image exported');
-    }
+    await new Promise((resolve, reject) => {
+      canvas.toBlob(blob => {
+        if (!blob) { reject(new Error('toBlob returned null')); return; }
+        const actualMime = blob.type;
+        const ext = actualMime === 'image/webp' ? 'webp' : (fmt === 'jpeg' ? 'jpeg' : 'png');
+        const url = URL.createObjectURL(blob);
+        const a   = document.createElement('a');
+        a.href = url; a.download = `bento.${ext}`;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        hideExportModal();
+        if (fmt === 'webp' && actualMime !== 'image/webp') {
+          showToast('WebP not supported in this browser — saved as PNG', false, 3500);
+        } else {
+          showToast('Image exported');
+        }
+        resolve();
+      }, mime, quality);
+    });
   } catch (err) {
     showToast('Export failed', true, 5000);
   } finally {
