@@ -948,7 +948,9 @@ select {
       <div class="size-presets" id="sizePresets">
         <button class="size-preset-btn active" data-w="" data-h="" onclick="selectSizePreset(this)">Auto</button>
         <button class="size-preset-btn" data-w="1080" data-h="1080" onclick="selectSizePreset(this)">1:1 — 1080</button>
+        <button class="size-preset-btn" data-w="2160" data-h="2160" onclick="selectSizePreset(this)">1:1 — 2160 (2×)</button>
         <button class="size-preset-btn" data-w="1080" data-h="1350" onclick="selectSizePreset(this)">4:5 — Portrait</button>
+        <button class="size-preset-btn" data-w="2160" data-h="2700" onclick="selectSizePreset(this)">4:5 — 2× Portrait</button>
         <button class="size-preset-btn" data-w="1080" data-h="1920" onclick="selectSizePreset(this)">9:16 — Story</button>
         <button class="size-preset-btn" data-w="1920" data-h="1080" onclick="selectSizePreset(this)">16:9 — Wide</button>
         <button class="size-preset-btn" data-w="custom" data-h="custom" onclick="selectSizePreset(this)">Custom</button>
@@ -1932,6 +1934,14 @@ async function _renderToCanvas(targetW, targetH) {
     colW = cellSize; rowH = cellSize;
     naturalW = gridCols * cellSize + (gridCols - 1) * gap;
     naturalH = gridRows * cellSize + (gridRows - 1) * gap;
+  }
+
+  // Auto export: scale up so the longest side is at least 2400px
+  if (!targetW && !targetH) {
+    const minSide = 2400;
+    const autoScale = Math.max(1, minSide / Math.max(naturalW, naturalH));
+    targetW = Math.round(naturalW * autoScale);
+    targetH = Math.round(naturalH * autoScale);
   }
 
   const outW = targetW || naturalW;
