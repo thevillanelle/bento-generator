@@ -948,9 +948,7 @@ select {
       <div class="size-presets" id="sizePresets">
         <button class="size-preset-btn active" data-w="" data-h="" onclick="selectSizePreset(this)">Auto</button>
         <button class="size-preset-btn" data-w="1080" data-h="1080" onclick="selectSizePreset(this)">1:1 — 1080</button>
-        <button class="size-preset-btn" data-w="2160" data-h="2160" onclick="selectSizePreset(this)">1:1 — 2160 (2×)</button>
         <button class="size-preset-btn" data-w="1080" data-h="1350" onclick="selectSizePreset(this)">4:5 — Portrait</button>
-        <button class="size-preset-btn" data-w="2160" data-h="2700" onclick="selectSizePreset(this)">4:5 — 2× Portrait</button>
         <button class="size-preset-btn" data-w="1080" data-h="1920" onclick="selectSizePreset(this)">9:16 — Story</button>
         <button class="size-preset-btn" data-w="1920" data-h="1080" onclick="selectSizePreset(this)">16:9 — Wide</button>
         <button class="size-preset-btn" data-w="custom" data-h="custom" onclick="selectSizePreset(this)">Custom</button>
@@ -1936,18 +1934,22 @@ async function _renderToCanvas(targetW, targetH) {
     naturalH = gridRows * cellSize + (gridRows - 1) * gap;
   }
 
-  // Auto export: scale up so the longest side is at least 2400px
-  if (!targetW && !targetH) {
+  // Output size priority: explicit export modal selection → custom canvas px size → 2400px min
+  let outW, outH;
+  if (targetW && targetH) {
+    outW = targetW;
+    outH = targetH;
+  } else if (canvasPreset === 'custom') {
+    outW = canvasCustomW;
+    outH = canvasCustomH;
+  } else {
     const minSide = 2400;
     const autoScale = Math.max(1, minSide / Math.max(naturalW, naturalH));
-    targetW = Math.round(naturalW * autoScale);
-    targetH = Math.round(naturalH * autoScale);
+    outW = Math.round(naturalW * autoScale);
+    outH = Math.round(naturalH * autoScale);
   }
-
-  const outW = targetW || naturalW;
-  const outH = targetH || naturalH;
-  const sx   = outW / naturalW;
-  const sy   = outH / naturalH;
+  const sx = outW / naturalW;
+  const sy = outH / naturalH;
 
   // Preload only the photos that are actually used
   const imgCache = {};
